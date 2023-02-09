@@ -378,7 +378,7 @@ var maxTextBlockLength = 10000
 func truncate(s string) string {
 	runes := []rune(s)
 	if len(runes) > maxTextBlockLength {
-		return string(runes[:maxTextBlockLength]) + "\n … too long truncated"
+		return string(runes[:maxTextBlockLength]) + "\n … too long, truncated."
 	}
 	return s
 }

@@ -232,12 +232,12 @@ Condition not satisfied:
 
 waitForViolation(deploymentName,  policyName, 60)
 |                |      
- … too long truncated
+ … too long, truncated.
 {code}
 {code:title=STDOUT|borderStyle=solid}
 ?[1;30m21:35:15?[0;39m | ?[34mINFO ?[0;39m | DefaultPoliciesTest       | Starting testcase
 ?[1;30m21
- … too long truncated
+ … too long, truncated.
 {code}
 
 ||    ENV     ||      Value           ||
