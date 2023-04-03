@@ -281,7 +281,7 @@ const (
 | CLUSTER      | {{- .Cluster -}}      |
 | ORCHESTRATOR | {{- .Orchestrator -}} |
 `
-	summaryTpl = `{{ .Suite }} / {{ .Name }} FAILED`
+	summaryTpl = `{{ (print .Suite " / " .Name) | truncateSummary }} FAILED`
 )
 
 type testCase struct {
@@ -352,7 +352,7 @@ func (tc *testCase) addSubTest(subTest junit.Test) {
 }
 
 func render(tc testCase, text string) (string, error) {
-	tmpl, err := template.New("test").Funcs(map[string]any{"truncate": truncate}).Parse(text)
+	tmpl, err := template.New("test").Funcs(map[string]any{"truncate": truncate, "truncateSummary": truncateSummary}).Parse(text)
 	if err != nil {
 		return "", err
 	}
@@ -379,6 +379,16 @@ func truncate(s string) string {
 	runes := []rune(s)
 	if len(runes) > maxTextBlockLength {
 		return string(runes[:maxTextBlockLength]) + "\n … too long, truncated."
+	}
+	return s
+}
+
+var maxSummaryLength = 200
+
+func truncateSummary(s string) string {
+	runes := []rune(s)
+	if len(runes) > maxSummaryLength {
+		return string(runes[:maxSummaryLength]) + "..."
 	}
 	return s
 }
