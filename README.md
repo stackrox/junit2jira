@@ -15,7 +15,7 @@ go test ./...
 ### Usage
 ```shell
 JIRA_TOKEN="..." junit2jira \
-  -jira-url "..." \
+  -jira-url "https://..." \
   -junit-reports-dir "..." \
   -base-link "https://..." \
   -build-id "$BUILD_ID|GITHUB_RUN_ID" \

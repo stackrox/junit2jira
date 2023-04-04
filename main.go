@@ -35,7 +35,6 @@ func main() {
 	flag.StringVar(&junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
 	flag.BoolVar(&dryRun, "dry-run", false, "When set to true issues will NOT be created.")
 	flag.IntVar(&threshold, "threshold", 10, "Number of reported failures that should cause single issue creation.")
-
 	flag.StringVar(&p.BaseLink, "base-link", "", "Link to revision")
 	flag.StringVar(&p.BuildId, "build-id", "", "Build job run ID")
 	flag.StringVar(&p.BuildLink, "build-link", "", "Link to build job")
