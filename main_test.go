@@ -223,7 +223,7 @@ org.spockframework.runtime.ConditionNotSatisfiedError: Condition not satisfied:
 {code}
 
 ||    ENV     ||      Value           ||
-| BUILD ID     | [1|https://prow.ci.openshift.org/view/gs/origin-ci-test/logs//1]|
+| BUILD ID     | [1|https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/1]|
 | BUILD TAG    | [|]|
 | JOB NAME     ||
 | ORCHESTRATOR ||
@@ -250,7 +250,7 @@ waitForViolation(deploymentName,  policyName, 60)
 {code}
 
 ||    ENV     ||      Value           ||
-| BUILD ID     | [1|https://prow.ci.openshift.org/view/gs/origin-ci-test/logs//1]|
+| BUILD ID     | [1|https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/1]|
 | BUILD TAG    | [|]|
 | JOB NAME     ||
 | ORCHESTRATOR ||
