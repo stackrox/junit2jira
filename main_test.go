@@ -201,7 +201,7 @@ func TestDescription(t *testing.T) {
 		Stderr:    "",
 		Suite:     "DefaultPoliciesTest",
 		BuildId:   "1",
-		BuildLink: "https://prow.ci.openshift.org/view/gs/origin-ci-test/logs//1",
+		BuildLink: "https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/1",
 	}
 	actual, err := tc.description()
 	assert.NoError(t, err)

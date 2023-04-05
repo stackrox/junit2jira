@@ -35,12 +35,12 @@ func main() {
 	flag.StringVar(&junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
 	flag.BoolVar(&dryRun, "dry-run", false, "When set to true issues will NOT be created.")
 	flag.IntVar(&threshold, "threshold", 10, "Number of reported failures that should cause single issue creation.")
-	flag.StringVar(&p.BaseLink, "base-link", "", "Link to revision")
-	flag.StringVar(&p.BuildId, "build-id", "", "Build job run ID")
-	flag.StringVar(&p.BuildLink, "build-link", "", "Link to build job")
-	flag.StringVar(&p.BuildTag, "build-tag", "", "Built tag or revision")
-	flag.StringVar(&p.JobName, "job-name", "", "Name of CI job")
-	flag.StringVar(&p.Orchestrator, "orchestrator", "", "Orchestrator name")
+	flag.StringVar(&p.BaseLink, "base-link", "", "Link to source code at the exact version under test.")
+	flag.StringVar(&p.BuildId, "build-id", "", "Build job run ID.")
+	flag.StringVar(&p.BuildLink, "build-link", "", "Link to build job.")
+	flag.StringVar(&p.BuildTag, "build-tag", "", "Built tag or revision.")
+	flag.StringVar(&p.JobName, "job-name", "", "Name of CI job.")
+	flag.StringVar(&p.Orchestrator, "orchestrator", "", "Orchestrator name (such as GKE or OpenShift), if any.")
 
 	flag.Parse()
 
