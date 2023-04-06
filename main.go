@@ -27,14 +27,10 @@ ORDER BY created DESC`
 func main() {
 
 	p := params{}
-	jiraUrl := ""
-	junitReportsDir := ""
-	dryRun := false
-	threshold := 0
-	flag.StringVar(&jiraUrl, "jira-url", "https://issues.redhat.com/", "Url of JIRA instance")
-	flag.StringVar(&junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
-	flag.BoolVar(&dryRun, "dry-run", false, "When set to true issues will NOT be created.")
-	flag.IntVar(&threshold, "threshold", 10, "Number of reported failures that should cause single issue creation.")
+	flag.StringVar(&p.jiraUrl, "jira-url", "https://issues.redhat.com/", "Url of JIRA instance")
+	flag.StringVar(&p.junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
+	flag.BoolVar(&p.dryRun, "dry-run", false, "When set to true issues will NOT be created.")
+	flag.IntVar(&p.threshold, "threshold", 10, "Number of reported failures that should cause single issue creation.")
 	flag.StringVar(&p.BaseLink, "base-link", "", "Link to source code at the exact version under test.")
 	flag.StringVar(&p.BuildId, "build-id", "", "Build job run ID.")
 	flag.StringVar(&p.BuildLink, "build-link", "", "Link to build job.")
@@ -44,7 +40,7 @@ func main() {
 
 	flag.Parse()
 
-	failedTests, err := findFailedTests(junitReportsDir, p, threshold)
+	failedTests, err := findFailedTests(p)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,12 +52,12 @@ func main() {
 		Transport: transport,
 	}
 
-	jiraClient, err := jira.NewClient(tp.Client(), jiraUrl)
+	jiraClient, err := jira.NewClient(tp.Client(), p.jiraUrl)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = createIssuesOrComments(failedTests, jiraClient, dryRun)
+	err = createIssuesOrComments(failedTests, jiraClient, p.dryRun)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -172,19 +168,9 @@ func logError(err error, response *jira.Response) {
 	}
 }
 
-func Env() map[string]string {
-	m := make(map[string]string)
-	for _, e := range os.Environ() {
-		if i := strings.Index(e, "="); i >= 0 {
-			m[e[:i]] = e[i+1:]
-		}
-	}
-	return m
-}
-
-func findFailedTests(dirName string, p params, threshold int) ([]testCase, error) {
+func findFailedTests(p params) ([]testCase, error) {
 	failedTests := make([]testCase, 0)
-	testSuites, err := junit.IngestDir(dirName)
+	testSuites, err := junit.IngestDir(p.junitReportsDir)
 	if err != nil {
 		return nil, fmt.Errorf("coud not read files: %w", err)
 	}
@@ -198,7 +184,7 @@ func findFailedTests(dirName string, p params, threshold int) ([]testCase, error
 	}
 	log.Printf("Found %d failed tests", len(failedTests))
 
-	if len(failedTests) > threshold && threshold > 0 {
+	if len(failedTests) > p.threshold && p.threshold > 0 {
 		return mergeFailedTests(failedTests, p)
 	}
 
@@ -312,6 +298,11 @@ type params struct {
 	BuildTag     string
 	BaseLink     string
 	BuildLink    string
+
+	threshold       int
+	dryRun          bool
+	jiraUrl         string
+	junitReportsDir string
 }
 
 func NewTestCase(tc junit.Test, p params) testCase {

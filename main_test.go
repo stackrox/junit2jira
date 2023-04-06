@@ -7,12 +7,12 @@ import (
 
 func TestParseJunitReport(t *testing.T) {
 	t.Run("not existing", func(t *testing.T) {
-		tests, err := findFailedTests("not existing", params{}, 0)
+		tests, err := findFailedTests(params{junitReportsDir: "not existing"})
 		assert.Error(t, err)
 		assert.Nil(t, tests)
 	})
 	t.Run("golang", func(t *testing.T) {
-		tests, err := findFailedTests("testdata/report.xml", params{}, 0)
+		tests, err := findFailedTests(params{junitReportsDir: "testdata/report.xml"})
 		assert.NoError(t, err)
 		assert.Equal(t, []testCase{
 			{
@@ -32,7 +32,7 @@ func TestParseJunitReport(t *testing.T) {
 		}, tests)
 	})
 	t.Run("golang with threshold", func(t *testing.T) {
-		tests, err := findFailedTests("testdata/report.xml", params{JobName: "job-name"}, 1)
+		tests, err := findFailedTests(params{junitReportsDir: "testdata/report.xml", JobName: "job-name", threshold: 1})
 		assert.NoError(t, err)
 		assert.Equal(t, []testCase{
 			{
@@ -45,7 +45,7 @@ github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssu
 		}, tests)
 	})
 	t.Run("dir multiple suites with threshold", func(t *testing.T) {
-		tests, err := findFailedTests("testdata", params{JobName: "job-name", BuildId: "1"}, 3)
+		tests, err := findFailedTests(params{junitReportsDir: "testdata", JobName: "job-name", BuildId: "1", threshold: 3})
 		assert.NoError(t, err)
 
 		assert.ElementsMatch(
@@ -67,7 +67,7 @@ command-line-arguments / TestTimeout FAILED
 		)
 	})
 	t.Run("dir", func(t *testing.T) {
-		tests, err := findFailedTests("testdata", params{BuildId: "1"}, 0)
+		tests, err := findFailedTests(params{junitReportsDir: "testdata", BuildId: "1"})
 		assert.NoError(t, err)
 
 		assert.ElementsMatch(
@@ -140,7 +140,7 @@ command-line-arguments / TestTimeout FAILED
 		)
 	})
 	t.Run("gradle", func(t *testing.T) {
-		tests, err := findFailedTests("testdata/TEST-DefaultPoliciesTest.xml", params{BuildId: "1"}, 0)
+		tests, err := findFailedTests(params{junitReportsDir: "testdata/TEST-DefaultPoliciesTest.xml", BuildId: "1"})
 		assert.NoError(t, err)
 
 		assert.Equal(
