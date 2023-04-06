@@ -7,12 +7,18 @@ import (
 
 func TestParseJunitReport(t *testing.T) {
 	t.Run("not existing", func(t *testing.T) {
-		tests, err := findFailedTests(params{junitReportsDir: "not existing"})
+		j := junit2jira{
+			params: params{junitReportsDir: "not existing"},
+		}
+		tests, err := j.findFailedTests()
 		assert.Error(t, err)
 		assert.Nil(t, tests)
 	})
 	t.Run("golang", func(t *testing.T) {
-		tests, err := findFailedTests(params{junitReportsDir: "testdata/report.xml"})
+		j := junit2jira{
+			params: params{junitReportsDir: "testdata/report.xml"},
+		}
+		tests, err := j.findFailedTests()
 		assert.NoError(t, err)
 		assert.Equal(t, []testCase{
 			{
@@ -32,7 +38,10 @@ func TestParseJunitReport(t *testing.T) {
 		}, tests)
 	})
 	t.Run("golang with threshold", func(t *testing.T) {
-		tests, err := findFailedTests(params{junitReportsDir: "testdata/report.xml", JobName: "job-name", threshold: 1})
+		j := junit2jira{
+			params: params{junitReportsDir: "testdata/report.xml", JobName: "job-name", threshold: 1},
+		}
+		tests, err := j.findFailedTests()
 		assert.NoError(t, err)
 		assert.Equal(t, []testCase{
 			{
@@ -45,7 +54,10 @@ github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssu
 		}, tests)
 	})
 	t.Run("dir multiple suites with threshold", func(t *testing.T) {
-		tests, err := findFailedTests(params{junitReportsDir: "testdata", JobName: "job-name", BuildId: "1", threshold: 3})
+		j := junit2jira{
+			params: params{junitReportsDir: "testdata", JobName: "job-name", BuildId: "1", threshold: 3},
+		}
+		tests, err := j.findFailedTests()
 		assert.NoError(t, err)
 
 		assert.ElementsMatch(
@@ -67,7 +79,10 @@ command-line-arguments / TestTimeout FAILED
 		)
 	})
 	t.Run("dir", func(t *testing.T) {
-		tests, err := findFailedTests(params{junitReportsDir: "testdata", BuildId: "1"})
+		j := junit2jira{
+			params: params{junitReportsDir: "testdata", BuildId: "1"},
+		}
+		tests, err := j.findFailedTests()
 		assert.NoError(t, err)
 
 		assert.ElementsMatch(
@@ -140,7 +155,10 @@ command-line-arguments / TestTimeout FAILED
 		)
 	})
 	t.Run("gradle", func(t *testing.T) {
-		tests, err := findFailedTests(params{junitReportsDir: "testdata/TEST-DefaultPoliciesTest.xml", BuildId: "1"})
+		j := junit2jira{
+			params: params{junitReportsDir: "testdata/TEST-DefaultPoliciesTest.xml", BuildId: "1"},
+		}
+		tests, err := j.findFailedTests()
 		assert.NoError(t, err)
 
 		assert.Equal(
