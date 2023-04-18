@@ -12,7 +12,7 @@ go build ./...
 go test ./...
 ```
 
-### Usage example
+### Example usage
 ```shell
 JIRA_TOKEN="..." junit2jira \
   -jira-url "https://..." \
