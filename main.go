@@ -28,7 +28,7 @@ ORDER BY created DESC`
 
 func main() {
 	p := params{}
-	flag.StringVar(&p.csvOutput, "csv", "", "Convert XML to a CSV file (use dash [-] for stdout)")
+	flag.StringVar(&p.csvOutput, "csv-output", "", "Convert XML to a CSV file (use dash [-] for stdout)")
 	flag.StringVar(&p.jiraUrl, "jira-url", "https://issues.redhat.com/", "Url of JIRA instance")
 	flag.StringVar(&p.junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
 	flag.BoolVar(&p.dryRun, "dry-run", false, "When set to true issues will NOT be created.")
