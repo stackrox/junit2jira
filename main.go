@@ -218,6 +218,7 @@ func logError(err error, response *jira.Response) {
 func junit2csv(testSuites []junit.Suite, p params, output io.Writer) error {
 	w := csv.NewWriter(output)
 	header := []string{
+		"BuildId",
 		"Timestamp",
 		"Classname",
 		"Name",
@@ -237,6 +238,7 @@ func junit2csv(testSuites []junit.Suite, p params, output io.Writer) error {
 		for _, tc := range ts.Tests {
 			duration := fmt.Sprintf("%d", tc.Duration.Milliseconds())
 			row := []string{
+				p.BuildId,         // BuildId
 				p.timestamp,       // Timestamp
 				tc.Classname,      // Classname
 				tc.Name,           // Name
