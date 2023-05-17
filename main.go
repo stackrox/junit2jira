@@ -225,10 +225,6 @@ func junit2csv(testSuites []junit.Suite, p params, output io.Writer) error {
 		"Duration",
 		"Status",
 		"JobName",
-		"Orchestrator",
-		"BaseLink",
-		"BuildLink",
-		"BuildTag",
 	}
 	err := w.Write(header)
 	if err != nil {
@@ -245,10 +241,6 @@ func junit2csv(testSuites []junit.Suite, p params, output io.Writer) error {
 				duration,          // Duration
 				string(tc.Status), // Status
 				p.JobName,         // JobName
-				p.Orchestrator,    // Orchestrator
-				p.BaseLink,        // BaseLink
-				p.BuildLink,       // BuildLink
-				p.BuildTag,        // BuildTag
 			}
 			err := w.Write(row)
 			if err != nil {
