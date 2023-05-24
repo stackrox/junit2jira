@@ -130,6 +130,7 @@ func (j junit2jira) createIssueOrComment(tc testCase) error {
 	if err != nil {
 		return fmt.Errorf("could not get description: %w", err)
 	}
+	summary = "IGNORE: GJTEST: " + summary
 	log.Println("Searching for ", summary)
 	search, response, err := j.jiraClient.Issue.Search(fmt.Sprintf(jql, summary), nil)
 	if err != nil {
@@ -187,6 +188,9 @@ func newIssue(summary string, description string) *jira.Issue {
 			},
 			Project: jira.Project{
 				Key: "ROX",
+			},
+			Assignee: &jira.User{
+				Name: "gjefferi@redhat.com",
 			},
 			Summary:     summary,
 			Description: description,
