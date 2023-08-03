@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/csv"
 	"flag"
 	"fmt"
@@ -30,6 +31,7 @@ ORDER BY created DESC`
 func main() {
 	var debug bool
 	p := params{}
+	flag.StringVar(&p.htmlOutput, "html-output", "", "Generate HTML report (use dash [-] for stdout)")
 	flag.StringVar(&p.csvOutput, "csv-output", "", "Convert XML to a CSV file (use dash [-] for stdout)")
 	flag.StringVar(&p.jiraUrl, "jira-url", "https://issues.redhat.com/", "Url of JIRA instance")
 	flag.StringVar(&p.junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
@@ -99,9 +101,48 @@ func run(p params) error {
 		return errors.Wrap(err, "could not find failed tests")
 	}
 
-	err = j.createIssuesOrComments(failedTests)
+	issues, err := j.createIssuesOrComments(failedTests)
 	if err != nil {
 		return errors.Wrap(err, "could not create issues or comments")
+	}
+	return j.createHtml(issues)
+}
+
+//go:embed htmlOutput.html.tpl
+var htmlOutputTemplate string
+
+func (j junit2jira) createHtml(issues []*jira.Issue) error {
+	if j.htmlOutput == "" || len(issues) == 0 {
+		return nil
+	}
+	out := os.Stdout
+	if j.htmlOutput != "-" {
+		file, err := os.Create(j.htmlOutput)
+		if err != nil {
+			return fmt.Errorf("could not create file %s: %w", j.htmlOutput, err)
+		}
+		out = file
+		defer file.Close()
+	}
+	return j.renderHtml(issues, out)
+}
+
+type htmlData struct {
+	Issues  []*jira.Issue
+	JiraUrl string
+}
+
+func (j junit2jira) renderHtml(issues []*jira.Issue, out io.Writer) error {
+	t, err := template.New(j.htmlOutput).Parse(htmlOutputTemplate)
+	if err != nil {
+		return fmt.Errorf("could parse template: %w", err)
+	}
+	err = t.Execute(out, htmlData{
+		Issues:  issues,
+		JiraUrl: j.jiraUrl,
+	})
+	if err != nil {
+		return fmt.Errorf("could not render template %s: %w", j.htmlOutput, err)
 	}
 	return nil
 }
@@ -122,32 +163,36 @@ func (j junit2jira) createCsv(testSuites []junit.Suite) error {
 	return junit2csv(testSuites, j.params, out)
 }
 
-func (j junit2jira) createIssuesOrComments(failedTests []testCase) error {
+func (j junit2jira) createIssuesOrComments(failedTests []testCase) ([]*jira.Issue, error) {
 	var result error
+	issues := make([]*jira.Issue, 0, len(failedTests))
 	for _, tc := range failedTests {
-		err := j.createIssueOrComment(tc)
+		issue, err := j.createIssueOrComment(tc)
 		if err != nil {
 			result = multierror.Append(result, err)
 		}
+		if issue != nil {
+			issues = append(issues, issue)
+		}
 	}
-	return result
+	return issues, result
 }
 
-func (j junit2jira) createIssueOrComment(tc testCase) error {
+func (j junit2jira) createIssueOrComment(tc testCase) (*jira.Issue, error) {
 	summary, err := tc.summary()
 	if err != nil {
-		return fmt.Errorf("could not get summary: %w", err)
+		return nil, fmt.Errorf("could not get summary: %w", err)
 	}
 	description, err := tc.description()
 	if err != nil {
-		return fmt.Errorf("could not get description: %w", err)
+		return nil, fmt.Errorf("could not get description: %w", err)
 	}
 	const NA = "?"
 	logEntry(NA, summary).Debug("Searching for issue")
 	search, response, err := j.jiraClient.Issue.Search(fmt.Sprintf(jql, summary), nil)
 	if err != nil {
 		logError(err, response)
-		return fmt.Errorf("could not search: %w", err)
+		return nil, fmt.Errorf("could not search: %w", err)
 	}
 
 	issue := findMatchingIssue(search, summary)
@@ -156,15 +201,15 @@ func (j junit2jira) createIssueOrComment(tc testCase) error {
 		logEntry(NA, summary).Info("Issue not found. Creating new issue...")
 		if j.dryRun {
 			logEntry(NA, summary).Debugf("Dry run: will just print issue\n %q", description)
-			return nil
+			return nil, nil
 		}
 		create, response, err := j.jiraClient.Issue.Create(newIssue(summary, description))
 		if response != nil && err != nil {
 			logError(err, response)
-			return fmt.Errorf("could not create issue %s: %w", summary, err)
+			return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
 		}
 		logEntry(create.Key, summary).Info("Created new issue")
-		return nil
+		return create, nil
 	}
 
 	comment := jira.Comment{
@@ -175,16 +220,16 @@ func (j junit2jira) createIssueOrComment(tc testCase) error {
 
 	if j.dryRun {
 		logEntry(NA, issue.Fields.Summary).Debugf("Dry run: will just print comment:\n%q", description)
-		return nil
+		return issue, nil
 	}
 
 	addComment, response, err := j.jiraClient.Issue.AddComment(issue.ID, &comment)
 	if response != nil && err != nil {
 		logError(err, response)
-		return fmt.Errorf("could not create issue %s: %w", summary, err)
+		return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
 	}
 	logEntry(issue.Key, summary).Infof("Created comment %s", addComment.ID)
-	return nil
+	return issue, nil
 }
 
 func logEntry(id, summary string) *log.Entry {
@@ -402,6 +447,7 @@ type params struct {
 	junitReportsDir string
 	timestamp       string
 	csvOutput       string
+	htmlOutput      string
 }
 
 func NewTestCase(tc junit.Test, p params) testCase {
