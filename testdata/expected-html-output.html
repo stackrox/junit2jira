@@ -1,6 +1,6 @@
 <html>
 <head>
-<title><h4>Possible Flake Tests</h4></title>
+<title>Possible Flake Tests</title>
 <style>
 body { color: #e8e8e8; background-color: #424242; font-family: "Roboto", "Helvetica", "Arial", sans-serif }
 a { color: #ff8caa }

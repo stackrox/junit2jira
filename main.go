@@ -12,11 +12,11 @@ import (
 	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"html/template"
 	"io"
 	"net/http"
 	"os"
 	"strings"
-	"text/template"
 	"time"
 	"unicode"
 )
