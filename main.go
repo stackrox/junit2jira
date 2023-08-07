@@ -142,7 +142,7 @@ func (j junit2jira) renderHtml(issues []*jira.Issue, out io.Writer) error {
 		JiraUrl: j.jiraUrl,
 	})
 	if err != nil {
-		return fmt.Errorf("could not render template %s: %w", j.htmlOutput, err)
+		return fmt.Errorf("could not render template: %w", err)
 	}
 	return nil
 }
