@@ -31,7 +31,7 @@ ORDER BY created DESC`
 func main() {
 	var debug bool
 	p := params{}
-	flag.StringVar(&p.htmlOutput, "html-output", "", "Generate HTML report (use dash [-] for stdout)")
+	flag.StringVar(&p.htmlOutput, "html-output", "", "Generate HTML report to this file (use dash [-] for stdout)")
 	flag.StringVar(&p.csvOutput, "csv-output", "", "Convert XML to a CSV file (use dash [-] for stdout)")
 	flag.StringVar(&p.jiraUrl, "jira-url", "https://issues.redhat.com/", "Url of JIRA instance")
 	flag.StringVar(&p.junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
@@ -119,7 +119,7 @@ func (j junit2jira) createHtml(issues []*jira.Issue) error {
 	if j.htmlOutput != "-" {
 		file, err := os.Create(j.htmlOutput)
 		if err != nil {
-			return fmt.Errorf("could not create file %s: %w", j.htmlOutput, err)
+			return fmt.Errorf("could not create file %q: %w", j.htmlOutput, err)
 		}
 		out = file
 		defer file.Close()
