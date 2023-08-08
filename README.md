@@ -29,7 +29,7 @@ Usage of junit2jira:
   -dry-run
     	When set to true issues will NOT be created.
   -html-output string
-    	Generate HTML report (use dash [-] for stdout)
+    	Generate HTML report to this file (use dash [-] for stdout)
   -jira-url string
     	Url of JIRA instance (default "https://issues.redhat.com/")
   -job-name string
