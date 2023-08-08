@@ -105,7 +105,7 @@ func run(p params) error {
 	if err != nil {
 		return errors.Wrap(err, "could not create issues or comments")
 	}
-	return j.createHtml(issues)
+	return errors.Wrap(j.createHtml(issues), "could not create HTML report")
 }
 
 //go:embed htmlOutput.html.tpl
