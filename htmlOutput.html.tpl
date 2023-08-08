@@ -11,7 +11,7 @@ a:visited { color: #ff8caa }
 <ul>
 {{- $url := .JiraUrl -}}
 {{- range $issue := .Issues }}
-<li><a target=_blank href="{{ $url }}browse/{{ $issue.Key }}">
+<li><a target=_blank href="{{ $url.Parse ( print "browse/" $issue.Key ) }}">
 {{- $issue.Key }}: {{ if $issue.Fields }}{{ $issue.Fields.Summary }}{{ end -}}
 </a>
 {{- end }}

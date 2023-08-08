@@ -7,6 +7,7 @@ import (
 	"github.com/joshdk/go-junit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"net/url"
 	"testing"
 )
 
@@ -337,7 +338,9 @@ func TestCsvOutput(t *testing.T) {
 var expectedHtmlOutput string
 
 func TestHtmlOutput(t *testing.T) {
-	j := junit2jira{params: params{jiraUrl: "https://issues.redhat.com/"}}
+	u, err := url.Parse("https://issues.redhat.com")
+	assert.NoError(t, err)
+	j := junit2jira{params: params{jiraUrl: u}}
 
 	buf := bytes.NewBufferString("")
 	require.NoError(t, j.renderHtml(nil, buf))

@@ -15,6 +15,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -31,9 +32,10 @@ ORDER BY created DESC`
 func main() {
 	var debug bool
 	p := params{}
+	var jiraUrl string
 	flag.StringVar(&p.htmlOutput, "html-output", "", "Generate HTML report to this file (use dash [-] for stdout)")
 	flag.StringVar(&p.csvOutput, "csv-output", "", "Convert XML to a CSV file (use dash [-] for stdout)")
-	flag.StringVar(&p.jiraUrl, "jira-url", "https://issues.redhat.com/", "Url of JIRA instance")
+	flag.StringVar(&jiraUrl, "jira-url", "https://issues.redhat.com/", "Url of JIRA instance")
 	flag.StringVar(&p.junitReportsDir, "junit-reports-dir", os.Getenv("ARTIFACT_DIR"), "Dir that contains jUnit reports XML files")
 	flag.BoolVar(&p.dryRun, "dry-run", false, "When set to true issues will NOT be created.")
 	flag.IntVar(&p.threshold, "threshold", 10, "Number of reported failures that should cause single issue creation.")
@@ -48,11 +50,18 @@ func main() {
 	versioninfo.AddFlag(flag.CommandLine)
 	flag.Parse()
 
+	var err error
+
+	p.jiraUrl, err = url.Parse(jiraUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	err := run(p)
+	err = run(p)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,7 +80,7 @@ func run(p params) error {
 		Transport: transport,
 	}
 
-	jiraClient, err := jira.NewClient(tp.Client(), p.jiraUrl)
+	jiraClient, err := jira.NewClient(tp.Client(), p.jiraUrl.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not create client for %s", p.jiraUrl)
 	}
@@ -124,7 +133,7 @@ func (j junit2jira) createHtml(issues []*jira.Issue) error {
 
 type htmlData struct {
 	Issues  []*jira.Issue
-	JiraUrl string
+	JiraUrl *url.URL
 }
 
 func (j junit2jira) renderHtml(issues []*jira.Issue, out io.Writer) error {
@@ -438,7 +447,7 @@ type params struct {
 
 	threshold       int
 	dryRun          bool
-	jiraUrl         string
+	jiraUrl         *url.URL
 	junitReportsDir string
 	timestamp       string
 	csvOutput       string
