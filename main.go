@@ -63,11 +63,6 @@ type junit2jira struct {
 	jiraClient *jira.Client
 }
 
-const (
-	SUMMARY = "summary"
-	ID      = "ID"
-)
-
 func run(p params) error {
 	transport := http.DefaultTransport
 
