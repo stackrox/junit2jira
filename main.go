@@ -666,7 +666,7 @@ func failureToAttachment(title string, tc testCase) (slack.Attachment, error) {
 	}
 
 	if failureMessage == "" && failureValue == "" {
-		return slack.Attachment{}, fmt.Errorf("no junit failure message or value for %s", title)
+		return slack.Attachment{}, fmt.Errorf("no junit failure message or error for %s", title)
 	}
 
 	// Slack has a 3000-character limit for (non-field) text objects
