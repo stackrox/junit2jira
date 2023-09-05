@@ -131,7 +131,6 @@ func (j junit2jira) convertToSlack(tc []testCase) error {
 	}
 	slackMsg := convertJunitToSlack(tc...)
 	if slackMsg == nil {
-		log.Printf("warning: no slack message set")
 		slackMsg = []slack.Attachment{}
 	}
 
