@@ -638,7 +638,7 @@ func convertJunitToSlack(testCases ...testCase) []slack.Attachment {
 		}
 	}
 
-	if len(failedTestsBlocks) <= 0 {
+	if len(failedTestsBlocks) == 0 {
 		return nil
 	}
 
