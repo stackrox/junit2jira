@@ -7,13 +7,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/andygrunwald/go-jira"
-	"github.com/carlmjohnson/versioninfo"
-	"github.com/hashicorp/go-multierror"
-	junit "github.com/joshdk/go-junit"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
-	"github.com/slack-go/slack"
 	"html/template"
 	"io"
 	"net/http"
@@ -22,6 +15,14 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/andygrunwald/go-jira"
+	"github.com/carlmjohnson/versioninfo"
+	"github.com/hashicorp/go-multierror"
+	junit "github.com/joshdk/go-junit"
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 )
 
 const jql = `project in (ROX)
@@ -107,7 +108,7 @@ func run(p params) error {
 	if err != nil {
 		return errors.Wrap(err, "could not find failed tests")
 	}
-	err = j.convertToSlack(failedTests)
+	err = j.createSlackMessage(failedTests)
 	if err != nil {
 		return errors.Wrap(err, "could not convert to slack")
 	}
@@ -125,7 +126,7 @@ func run(p params) error {
 //go:embed htmlOutput.html.tpl
 var htmlOutputTemplate string
 
-func (j junit2jira) convertToSlack(tc []testCase) error {
+func (j junit2jira) createSlackMessage(tc []testCase) error {
 	if j.slackOutput == "" {
 		return nil
 	}
