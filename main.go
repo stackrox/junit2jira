@@ -76,7 +76,7 @@ type junit2jira struct {
 	jiraClient *jira.Client
 }
 
-type jiraIssue struct {
+type testIssue struct {
 	issue    *jira.Issue
 	testCase testCase
 }
