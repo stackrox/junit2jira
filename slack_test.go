@@ -43,9 +43,9 @@ func TestConstructSlackMessage(t *testing.T) {
 			assert.NoError(t, err, "If this fails, it probably indicates a problem with the sample junit report rather than the code")
 			assert.NotNil(t, suites, "If this fails, it probably indicates a problem with the sample junit report rather than the code")
 
-			issues := make([]*jiraIssue, 0, len(suites))
+			issues := make([]*testIssue, 0, len(suites))
 			for _, s := range suites {
-				issues = append(issues, &jiraIssue{
+				issues = append(issues, &testIssue{
 					issue:    nil,
 					testCase: s,
 				})

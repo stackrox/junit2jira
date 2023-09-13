@@ -137,7 +137,7 @@ func run(p params) error {
 //go:embed htmlOutput.html.tpl
 var htmlOutputTemplate string
 
-func (j junit2jira) createSlackMessage(tc []*jiraIssue) error {
+func (j junit2jira) createSlackMessage(tc []*testIssue) error {
 	if j.slackOutput == "" {
 		return nil
 	}
@@ -218,9 +218,9 @@ func (j junit2jira) createCsv(testSuites []junit.Suite) error {
 	return junit2csv(testSuites, j.params, out)
 }
 
-func (j junit2jira) createIssuesOrComments(failedTests []testCase) ([]*jiraIssue, error) {
+func (j junit2jira) createIssuesOrComments(failedTests []testCase) ([]*testIssue, error) {
 	var result error
-	issues := make([]*jiraIssue, 0, len(failedTests))
+	issues := make([]*testIssue, 0, len(failedTests))
 	for _, tc := range failedTests {
 		issue, err := j.createIssueOrComment(tc)
 		if err != nil {
@@ -254,7 +254,7 @@ func (j junit2jira) linkIssues(issues []*jira.Issue) error {
 	return result
 }
 
-func (j junit2jira) createIssueOrComment(tc testCase) (*jiraIssue, error) {
+func (j junit2jira) createIssueOrComment(tc testCase) (*testIssue, error) {
 	summary, err := tc.summary()
 	if err != nil {
 		return nil, fmt.Errorf("could not get summary: %w", err)
@@ -272,7 +272,7 @@ func (j junit2jira) createIssueOrComment(tc testCase) (*jiraIssue, error) {
 	}
 
 	issue := findMatchingIssue(search, summary)
-	issueWithTestCase := jiraIssue{
+	issueWithTestCase := testIssue{
 		issue:    issue,
 		testCase: tc,
 	}
@@ -624,7 +624,7 @@ func truncateSummary(s string) string {
 	return s
 }
 
-func convertJunitToSlack(issues ...*jiraIssue) []slack.Attachment {
+func convertJunitToSlack(issues ...*testIssue) []slack.Attachment {
 	var failedTestsBlocks []slack.Block
 	var attachments []slack.Attachment
 
