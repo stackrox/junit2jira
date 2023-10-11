@@ -639,10 +639,14 @@ func convertJunitToSlack(issues ...*testIssue) []slack.Attachment {
 
 		issue := i.issue
 		if issue != nil {
-			title = fmt.Sprintf("[**%s**](%s): %s", issue.Key, issue.Self, title)
+			title = fmt.Sprintf("%s: %s", issue.Key, title)
+		}
+		// Slack has a 150-character limit for text header
+		if len(title) > 150 {
+			title = title[:150]
 		}
 
-		titleTextBlock := slack.NewTextBlockObject("mrkdwn", title, false, false)
+		titleTextBlock := slack.NewTextBlockObject("plain_text", title, false, false)
 		titleSectionBlock := slack.NewSectionBlock(titleTextBlock, nil, nil)
 		failedTestsBlocks = append(failedTestsBlocks, titleSectionBlock)
 
@@ -700,7 +704,7 @@ func failureToAttachment(title string, tc testCase) (slack.Attachment, error) {
 	}
 
 	// Add some formatting to the failure title
-	failureTitleTextBlock := slack.NewTextBlockObject("mrkdwn", title, false, false)
+	failureTitleTextBlock := slack.NewTextBlockObject("plain_text", title, false, false)
 	failureTitleHeaderBlock := slack.NewHeaderBlock(failureTitleTextBlock)
 
 	failureAttachment := slack.Attachment{
