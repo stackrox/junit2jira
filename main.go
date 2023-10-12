@@ -25,12 +25,18 @@ import (
 	"github.com/slack-go/slack"
 )
 
-const jql = `project in (ROX)
+const (
+	jql = `project in (ROX)
 AND issuetype = Bug
 AND status != Closed
 AND labels = CI_Failure
 AND summary ~ %q
 ORDER BY created DESC`
+	// Slack has a 150-character limit for text header
+	slackHeaderTextLengthLimit = 150
+	// Slack has a 3000-character limit for (non-field) text objects
+	slackTextLengthLimit = 3000
+)
 
 func main() {
 	var debug bool
@@ -641,10 +647,7 @@ func convertJunitToSlack(issues ...*testIssue) []slack.Attachment {
 		if issue != nil {
 			title = fmt.Sprintf("%s: %s", issue.Key, title)
 		}
-		// Slack has a 150-character limit for text header
-		if len(title) > 150 {
-			title = title[:150]
-		}
+		title = crop(title, slackHeaderTextLengthLimit)
 
 		titleTextBlock := slack.NewTextBlockObject("plain_text", title, false, false)
 		titleSectionBlock := slack.NewSectionBlock(titleTextBlock, nil, nil)
@@ -695,13 +698,8 @@ func failureToAttachment(title string, tc testCase) (slack.Attachment, error) {
 		return slack.Attachment{}, fmt.Errorf("no junit failure message or error for %s", title)
 	}
 
-	// Slack has a 3000-character limit for (non-field) text objects
-	if len(failureMessage) > 3000 {
-		failureMessage = failureMessage[:3000]
-	}
-	if len(failureValue) > 3000 {
-		failureValue = failureValue[:3000]
-	}
+	failureMessage = crop(failureMessage, slackTextLengthLimit)
+	failureValue = crop(failureValue, slackTextLengthLimit)
 
 	// Add some formatting to the failure title
 	failureTitleTextBlock := slack.NewTextBlockObject("plain_text", title, false, false)
@@ -760,4 +758,11 @@ func failureToBlocks(failureTitleHeaderBlock *slack.HeaderBlock, messageText, va
 		additionalInfoSectionBlock,
 		failureValueSectionBlock,
 	}}
+}
+
+func crop(s string, l int) string {
+	if len(s) < l {
+		return s
+	}
+	return s[:l-1] + "…"
 }
