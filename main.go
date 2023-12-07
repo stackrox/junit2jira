@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	jql = `project in (%q)
+	jql = `project in (%s)
 AND issuetype = Bug
 AND status != Closed
 AND labels = CI_Failure
