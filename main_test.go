@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"net/url"
+	"testing"
+
 	"github.com/andygrunwald/go-jira"
 	"github.com/joshdk/go-junit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"net/url"
-	"testing"
 )
 
 func TestParseJunitReport(t *testing.T) {
@@ -362,4 +363,40 @@ func TestHtmlOutput(t *testing.T) {
 	require.NoError(t, j.renderHtml(issues, buf))
 
 	assert.Equal(t, expectedHtmlOutput, buf.String())
+}
+
+//go:embed testdata/jira/expected-summary-no-new-jiras.json
+var expectedSummaryNoNewJIRAs string
+
+func TestSummaryNoNewJIRAs(t *testing.T) {
+	buf := bytes.NewBufferString("")
+	require.NoError(t, generateSummary(nil, buf))
+	assert.Equal(t, expectedSummaryNoNewJIRAs, buf.String())
+}
+
+//go:embed testdata/jira/expected-summary-some-new-jiras.json
+var expectedSummarySomeNewJIRAs string
+
+func TestSummaryNoFailures(t *testing.T) {
+	tc := []*testIssue{
+		{
+			issue:    &jira.Issue{Key: "ROX-1"},
+			newJIRA:  false,
+			testCase: testCase{},
+		},
+		{
+			issue:    &jira.Issue{Key: "ROX-2"},
+			newJIRA:  true,
+			testCase: testCase{},
+		},
+		{
+			issue:    &jira.Issue{Key: "ROX-3"},
+			newJIRA:  true,
+			testCase: testCase{},
+		},
+	}
+
+	buf := bytes.NewBufferString("")
+	require.NoError(t, generateSummary(tc, buf))
+	assert.Equal(t, expectedSummarySomeNewJIRAs, buf.String())
 }
