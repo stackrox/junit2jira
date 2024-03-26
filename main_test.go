@@ -365,19 +365,15 @@ func TestHtmlOutput(t *testing.T) {
 	assert.Equal(t, expectedHtmlOutput, buf.String())
 }
 
-//go:embed testdata/jira/expected-summary-no-new-jiras.json
-var expectedSummaryNoNewJIRAs string
-
 func TestSummaryNoNewJIRAs(t *testing.T) {
+	expectedSummaryNoNewJIRAs := `{"newJIRAs":0}`
 	buf := bytes.NewBufferString("")
 	require.NoError(t, generateSummary(nil, buf))
 	assert.Equal(t, expectedSummaryNoNewJIRAs, buf.String())
 }
 
-//go:embed testdata/jira/expected-summary-some-new-jiras.json
-var expectedSummarySomeNewJIRAs string
-
 func TestSummaryNoFailures(t *testing.T) {
+	expectedSummarySomeNewJIRAs := `{"newJIRAs":2}`
 	tc := []*testIssue{
 		{
 			issue:    &jira.Issue{Key: "ROX-1"},
