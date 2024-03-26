@@ -291,7 +291,6 @@ func (j junit2jira) createIssueOrComment(tc testCase) (*testIssue, error) {
 	issue := findMatchingIssue(search, summary)
 	issueWithTestCase := testIssue{
 		issue:    issue,
-		newJIRA:  false,
 		testCase: tc,
 	}
 
