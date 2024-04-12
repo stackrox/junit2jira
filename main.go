@@ -320,7 +320,7 @@ func (j junit2jira) createIssueOrComment(tc testCase) (*testIssue, error) {
 		Body: description,
 	}
 
-	logEntry(issue.ID, issue.Fields.Summary).Info("Found issue. Creating a comment...")
+	logEntry(issue.Key, issue.Fields.Summary).Info("Found issue. Creating a comment...")
 
 	if j.dryRun {
 		logEntry(NA, issue.Fields.Summary).Debugf("Dry run: will just print comment:\n%q", description)
