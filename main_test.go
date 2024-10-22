@@ -313,7 +313,10 @@ func TestCsvOutput(t *testing.T) {
 		timestamp:    "time",
 	}
 	buf := bytes.NewBufferString("")
-	testSuites, err := junit.IngestDir("testdata/jira/TEST-DefaultPoliciesTest.xml")
+	testSuites, err := junit.IngestFiles([]string{
+		"testdata/jira/TEST-DefaultPoliciesTest.xml",
+		"testdata/jira/kuttl-report.xml",
+	})
 	assert.NoError(t, err)
 	err = junit2csv(testSuites, p, buf)
 	assert.NoError(t, err)
@@ -334,6 +337,55 @@ func TestCsvOutput(t *testing.T) {
 1,time,DefaultPoliciesTest,Verify that built-in services don't trigger unexpected alerts,0,skipped,"comma ,",0.0.0
 1,time,DefaultPoliciesTest,Verify that alert counts API is consistent with alerts,0,skipped,"comma ,",0.0.0
 1,time,DefaultPoliciesTest,Verify that alert groups API is consistent with alerts,0,skipped,"comma ,",0.0.0
+1,time,central-basic,setup,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 0-image-pull-secrets,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 10-central-cr,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 11-,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 20-verify-password,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 30-change-password,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 40-reconcile,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 60-use-new-password,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 75-switch-to-external-central-db,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 76-switch-back-to-internal-central-db,0,passed,"comma ,",0.0.0
+1,time,central-basic,step 90-activate-scanner-v4,0,failed,"comma ,",0.0.0
+1,time,central-misc,setup,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 0-image-pull-secrets,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 10-central-cr,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 11-,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 40-enable-declarative-config,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 41-disable-declarative-config,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 61-set-expose-monitoring,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 62-,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 63-unset-expose-monitoring,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 64-,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 80-enable-telemetry,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 81-disable-telemetry,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 85-add-additional-ca,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 900-delete-cr,0,passed,"comma ,",0.0.0
+1,time,central-misc,step 990-,0,passed,"comma ,",0.0.0
+1,time,metrics,setup,0,passed,"comma ,",0.0.0
+1,time,metrics,step 100-rbac,0,passed,"comma ,",0.0.0
+1,time,metrics,step 200-access-no-auth,0,passed,"comma ,",0.0.0
+1,time,sc-basic,setup,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 0-image-pull-secrets,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 5-central-cr,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 7-fetch-bundle,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 10-secured-cluster-cr,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 12-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 13-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 14-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 15-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 16-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 20-try-change-cluster-name,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 30-change-cluster-name-back,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 40-enable-monitoring,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 41-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 42-disable-monitoring,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 43-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 900-delete-central-cr,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 910-,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 950-delete-secured-cluster-cr,0,passed,"comma ,",0.0.0
+1,time,sc-basic,step 990-,0,passed,"comma ,",0.0.0
 `
 	assert.Equal(t, expected, buf.String())
 
