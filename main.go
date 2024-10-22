@@ -436,27 +436,39 @@ func junit2csv(testSuites []junit.Suite, p params, output io.Writer) error {
 		return fmt.Errorf("coud not write header: %w", err)
 	}
 	for _, ts := range testSuites {
-		for _, tc := range ts.Tests {
-			duration := fmt.Sprintf("%d", tc.Duration.Milliseconds())
-			row := []string{
-				p.BuildId,         // BuildId
-				p.timestamp,       // Timestamp
-				tc.Classname,      // Classname
-				tc.Name,           // Name
-				duration,          // Duration
-				string(tc.Status), // Status
-				p.JobName,         // JobName
-				p.BuildTag,        // BuildTag
-			}
-			err := w.Write(row)
-			if err != nil {
-				return fmt.Errorf("coud not write row: %w", err)
-			}
+		if err = testSuiteToCSV(ts, p, w); err != nil {
+			return err
 		}
 	}
 	w.Flush()
 	if w.Error() != nil {
 		return fmt.Errorf("could not flush CSV: %w", w.Error())
+	}
+	return nil
+}
+
+func testSuiteToCSV(ts junit.Suite, p params, w *csv.Writer) error {
+	for _, subTs := range ts.Suites {
+		if err := testSuiteToCSV(subTs, p, w); err != nil {
+			return err
+		}
+	}
+	for _, tc := range ts.Tests {
+		duration := fmt.Sprintf("%d", tc.Duration.Milliseconds())
+		row := []string{
+			p.BuildId,         // BuildId
+			p.timestamp,       // Timestamp
+			tc.Classname,      // Classname
+			tc.Name,           // Name
+			duration,          // Duration
+			string(tc.Status), // Status
+			p.JobName,         // JobName
+			p.BuildTag,        // BuildTag
+		}
+		err := w.Write(row)
+		if err != nil {
+			return fmt.Errorf("coud not write row: %w", err)
+		}
 	}
 	return nil
 }
