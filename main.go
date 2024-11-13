@@ -256,6 +256,11 @@ func (j junit2jira) linkIssues(issues []*jira.Issue) error {
 	var result error
 	for x, issue := range issues {
 		for y := 0; y < x; y++ {
+			// Skip cases where we have the same inward and outward issue
+			if issue.Key == issues[y].Key {
+				continue
+			}
+
 			_, err := j.jiraClient.Issue.AddLink(&jira.IssueLink{
 				Type:         jira.IssueLinkType{Name: linkType},
 				OutwardIssue: &jira.Issue{Key: issue.Key},
