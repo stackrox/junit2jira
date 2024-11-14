@@ -24,9 +24,9 @@ func TestParseJunitReport(t *testing.T) {
 		}
 		testsSuites, err := junit.IngestDir(j.junitReportsDir)
 		assert.NoError(t, err)
-		tests, err := j.findFailedTests(testsSuites)
+		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
-		assert.Equal(t, []testCase{
+		assert.Equal(t, []j2jTestCase{
 			{
 				Name:    "TestDifferentBaseTypes",
 				Suite:   "github.com/stackrox/rox/pkg/booleanpolicy/evaluator",
@@ -49,9 +49,9 @@ func TestParseJunitReport(t *testing.T) {
 		}
 		testsSuites, err := junit.IngestDir(j.junitReportsDir)
 		assert.NoError(t, err)
-		tests, err := j.findFailedTests(testsSuites)
+		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
-		assert.Equal(t, []testCase{
+		assert.Equal(t, []j2jTestCase{
 			{
 				Message: `github.com/stackrox/rox/pkg/booleanpolicy/evaluator / TestDifferentBaseTypes FAILED
 github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssuerIntegrationTests FAILED
@@ -67,12 +67,12 @@ github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssu
 		}
 		testsSuites, err := junit.IngestDir(j.junitReportsDir)
 		assert.NoError(t, err)
-		tests, err := j.findFailedTests(testsSuites)
+		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
 
 		assert.ElementsMatch(
 			t,
-			[]testCase{
+			[]j2jTestCase{
 				{
 					Message: `DefaultPoliciesTest / Verify policy Apache Struts  CVE-2017-5638 is triggered FAILED
 central-basic / step 90-activate-scanner-v4 FAILED
@@ -95,12 +95,12 @@ command-line-arguments / TestTimeout FAILED
 		}
 		testsSuites, err := junit.IngestDir(j.junitReportsDir)
 		assert.NoError(t, err)
-		tests, err := j.findFailedTests(testsSuites)
+		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
 
 		assert.ElementsMatch(
 			t,
-			[]testCase{
+			[]j2jTestCase{
 				{
 					Name: "Verify policy Apache Struts: CVE-2017-5638 is triggered",
 					Message: "Condition not satisfied:\n" +
@@ -180,12 +180,12 @@ command-line-arguments / TestTimeout FAILED
 		}
 		testsSuites, err := junit.IngestDir(j.junitReportsDir)
 		assert.NoError(t, err)
-		tests, err := j.findFailedTests(testsSuites)
+		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
 
 		assert.Equal(
 			t,
-			[]testCase{{
+			[]j2jTestCase{{
 				Name: "Verify policy Apache Struts: CVE-2017-5638 is triggered",
 				Message: "Condition not satisfied:\n" +
 					"\n" +
@@ -226,7 +226,7 @@ command-line-arguments / TestTimeout FAILED
 }
 
 func TestDescription(t *testing.T) {
-	tc := testCase{
+	tc := j2jTestCase{
 		Name: "Verify policy Apache Struts: CVE-2017-5638 is triggered",
 		Message: "Condition not satisfied:\n" +
 			"\n" +
@@ -430,17 +430,17 @@ func TestSummaryNoFailures(t *testing.T) {
 		{
 			issue:    &jira.Issue{Key: "ROX-1"},
 			newJIRA:  false,
-			testCase: testCase{},
+			testCase: j2jTestCase{},
 		},
 		{
 			issue:    &jira.Issue{Key: "ROX-2"},
 			newJIRA:  true,
-			testCase: testCase{},
+			testCase: j2jTestCase{},
 		},
 		{
 			issue:    &jira.Issue{Key: "ROX-3"},
 			newJIRA:  true,
-			testCase: testCase{},
+			testCase: j2jTestCase{},
 		},
 	}
 

@@ -1,6 +1,6 @@
-module github.com/janisz/junit2jira
+module github.com/stackrox/junit2jira
 
-go 1.19
+go 1.21
 
 require (
 	github.com/andygrunwald/go-jira v1.16.0

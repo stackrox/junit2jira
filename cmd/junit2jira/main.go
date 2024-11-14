@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/stackrox/junit2jira/pkg/testcase"
 	"html/template"
 	"io"
 	"net/http"
@@ -87,7 +88,7 @@ type junit2jira struct {
 type testIssue struct {
 	issue    *jira.Issue
 	newJIRA  bool
-	testCase testCase
+	testCase j2jTestCase
 }
 
 func run(p params) error {
@@ -118,7 +119,7 @@ func run(p params) error {
 		log.Fatalf("could not create CSV: %s", err)
 	}
 
-	failedTests, err := j.findFailedTests(testSuites)
+	failedTests, err := j.getMergedFailedTests(testSuites)
 	if err != nil {
 		return errors.Wrap(err, "could not find failed tests")
 	}
@@ -149,6 +150,28 @@ func run(p params) error {
 	}
 
 	return errors.Wrap(j.createHtml(jiraIssues), "could not create HTML report")
+}
+
+func (j junit2jira) getMergedFailedTests(testSuites []junit.Suite) ([]j2jTestCase, error) {
+	failedTests, err := testcase.GetFailedTests(testSuites)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get failed tests")
+	}
+	log.Infof("Found %d failed tests", len(failedTests))
+
+	failedJ2jTests := make([]j2jTestCase, 0, len(failedTests))
+	for _, failedTest := range failedTests {
+		failedJ2jTests = append(failedJ2jTests, newJ2jTestCase(failedTest, j.params))
+	}
+
+	if 0 < j.threshold && j.threshold < len(failedTests) {
+		failedJ2jTests, err = j.mergeFailedTests(failedJ2jTests)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not merge failed tests")
+		}
+	}
+
+	return failedJ2jTests, nil
 }
 
 //go:embed htmlOutput.html.tpl
@@ -235,7 +258,7 @@ func (j junit2jira) createCsv(testSuites []junit.Suite) error {
 	return junit2csv(testSuites, j.params, out)
 }
 
-func (j junit2jira) createIssuesOrComments(failedTests []testCase) ([]*testIssue, error) {
+func (j junit2jira) createIssuesOrComments(failedTests []j2jTestCase) ([]*testIssue, error) {
 	var result error
 	issues := make([]*testIssue, 0, len(failedTests))
 	for _, tc := range failedTests {
@@ -277,7 +300,7 @@ func (j junit2jira) linkIssues(issues []*jira.Issue) error {
 	return result
 }
 
-func (j junit2jira) createIssueOrComment(tc testCase) (*testIssue, error) {
+func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	summary, err := tc.summary()
 	if err != nil {
 		return nil, fmt.Errorf("could not get summary: %w", err)
@@ -479,34 +502,7 @@ func testSuiteToCSV(ts junit.Suite, p params, w *csv.Writer) error {
 	return nil
 }
 
-func (j junit2jira) findFailedTests(testSuites []junit.Suite) ([]testCase, error) {
-	failedTests := make([]testCase, 0)
-	for _, ts := range testSuites {
-		failedTests = j.addFailedTests(ts, failedTests)
-	}
-	log.Infof("Found %d failed tests", len(failedTests))
-
-	if len(failedTests) > j.threshold && j.threshold > 0 {
-		return j.mergeFailedTests(failedTests)
-	}
-
-	return failedTests, nil
-}
-
-func (j junit2jira) addFailedTests(ts junit.Suite, failedTests []testCase) []testCase {
-	for _, suite := range ts.Suites {
-		failedTests = j.addFailedTests(suite, failedTests)
-	}
-	for _, tc := range ts.Tests {
-		if tc.Error == nil {
-			continue
-		}
-		failedTests = j.addTest(failedTests, tc)
-	}
-	return failedTests
-}
-
-func (j junit2jira) mergeFailedTests(failedTests []testCase) ([]testCase, error) {
+func (j junit2jira) mergeFailedTests(failedTests []j2jTestCase) ([]j2jTestCase, error) {
 	log.Warning("Too many failed tests, reporting them as a one failure.")
 	msg := ""
 	suite := failedTests[0].Suite
@@ -521,42 +517,15 @@ func (j junit2jira) mergeFailedTests(failedTests []testCase) ([]testCase, error)
 		}
 		msg += summary + "\n"
 	}
-	tc := NewTestCase(junit.Test{
-		Message:   msg,
-		Classname: suite,
-	}, j.params)
-	return []testCase{tc}, nil
-}
 
-func (j junit2jira) addTest(failedTests []testCase, tc junit.Test) []testCase {
-	if !isSubTest(tc) {
-		return append(failedTests, NewTestCase(tc, j.params))
-	}
-	return j.addSubTestToFailedTest(tc, failedTests)
-}
+	tc := newJ2jTestCase(
+		testcase.NewTestCase(
+			junit.Test{
+				Message:   msg,
+				Classname: suite,
+			}), j.params)
 
-func isSubTest(tc junit.Test) bool {
-	return strings.Contains(tc.Name, "/")
-}
-
-func (j junit2jira) addSubTestToFailedTest(subTest junit.Test, failedTests []testCase) []testCase {
-	// As long as the separator is not empty, split will always return a slice of length 1.
-	name := strings.Split(subTest.Name, "/")[0]
-	for i, failedTest := range failedTests {
-		// Only consider a failed test a "parent" of the test if the name matches _and_ the class name is the same.
-		if isGoTest(subTest.Classname) && failedTest.Name == name && failedTest.Suite == subTest.Classname {
-			failedTest.addSubTest(subTest)
-			failedTests[i] = failedTest
-			return failedTests
-		}
-	}
-	// In case we found no matches, we will default to add the subtest plain.
-	return append(failedTests, NewTestCase(subTest, j.params))
-}
-
-// isGoTest will verify that the corresponding classname refers to a go package by expecting the go module name as prefix.
-func isGoTest(className string) bool {
-	return strings.HasPrefix(className, "github.com/stackrox/rox")
+	return []j2jTestCase{tc}, nil
 }
 
 const (
@@ -591,13 +560,15 @@ const (
 	summaryTpl = `{{ (print .Suite " / " .Name) | truncateSummary }} FAILED`
 )
 
-type testCase struct {
-	Name         string
-	Suite        string
-	Message      string
-	Stdout       string
-	Stderr       string
-	Error        string
+type j2jTestCase struct {
+	Name    string
+	Suite   string
+	Message string
+	Stdout  string
+	Stderr  string
+	Error   string
+
+	// Additional fields for junit2jira
 	BuildId      string
 	JobName      string
 	Orchestrator string
@@ -626,13 +597,14 @@ type params struct {
 	summaryOutput   string
 }
 
-func NewTestCase(tc junit.Test, p params) testCase {
-	c := testCase{
-		Name:         tc.Name,
-		Message:      tc.Message,
-		Stdout:       tc.SystemOut,
-		Stderr:       tc.SystemErr,
-		Suite:        tc.Classname,
+func newJ2jTestCase(testCase testcase.TestCase, p params) j2jTestCase {
+	return j2jTestCase{
+		Name:         testCase.Name,
+		Suite:        testCase.Suite,
+		Message:      testCase.Message,
+		Stdout:       testCase.Stdout,
+		Stderr:       testCase.Stderr,
+		Error:        testCase.Error,
 		BuildId:      p.BuildId,
 		JobName:      p.JobName,
 		Orchestrator: p.Orchestrator,
@@ -640,18 +612,13 @@ func NewTestCase(tc junit.Test, p params) testCase {
 		BaseLink:     p.BaseLink,
 		BuildLink:    p.BuildLink,
 	}
-
-	if tc.Error != nil {
-		c.Error = tc.Error.Error()
-	}
-	return c
 }
 
-func (tc *testCase) description() (string, error) {
+func (tc *j2jTestCase) description() (string, error) {
 	return render(*tc, desc)
 }
 
-func (tc testCase) summary() (string, error) {
+func (tc j2jTestCase) summary() (string, error) {
 	s, err := render(tc, summaryTpl)
 	if err != nil {
 		return "", err
@@ -659,24 +626,7 @@ func (tc testCase) summary() (string, error) {
 	return clearString(s), nil
 }
 
-const subTestFormat = "\nSub test %s: %s"
-
-func (tc *testCase) addSubTest(subTest junit.Test) {
-	if subTest.Message != "" {
-		tc.Message += fmt.Sprintf(subTestFormat, subTest.Name, subTest.Message)
-	}
-	if subTest.SystemOut != "" {
-		tc.Stdout += fmt.Sprintf(subTestFormat, subTest.Name, subTest.SystemOut)
-	}
-	if subTest.SystemErr != "" {
-		tc.Stderr += fmt.Sprintf(subTestFormat, subTest.Name, subTest.SystemErr)
-	}
-	if subTest.Error != nil {
-		tc.Error += fmt.Sprintf(subTestFormat, subTest.Name, subTest.Error.Error())
-	}
-}
-
-func render(tc testCase, text string) (string, error) {
+func render(tc j2jTestCase, text string) (string, error) {
 	tmpl, err := template.New("test").Funcs(map[string]any{"truncate": truncate, "truncateSummary": truncateSummary}).Parse(text)
 	if err != nil {
 		return "", err
@@ -774,7 +724,7 @@ func convertJunitToSlack(issues ...*testIssue) []slack.Attachment {
 	return attachments
 }
 
-func failureToAttachment(title string, tc testCase) (slack.Attachment, error) {
+func failureToAttachment(title string, tc j2jTestCase) (slack.Attachment, error) {
 
 	failureMessage := tc.Message
 	failureValue := tc.Error
