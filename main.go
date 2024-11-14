@@ -256,7 +256,8 @@ func (j junit2jira) linkIssues(issues []*jira.Issue) error {
 	var result error
 	for x, issue := range issues {
 		for y := 0; y < x; y++ {
-			// Skip cases where we have the same inward and outward issue
+			// Skip cases where we have the same inward and outward issue.
+			// Jira does not allow linking a ticket to itself.
 			if issue.Key == issues[y].Key {
 				continue
 			}
