@@ -1,0 +1,18 @@
+[
+  {
+    "_comment": "Config with regex",
+    "match_job_name": "pr-.*",
+    "ratio_job_name": "main-branch-tests",
+    "test_name_regex": "TestLoadFlakeConf.*",
+    "classname": "TestLoadFlakeConfigFile",
+    "ratio_threshold": 5
+  },
+  {
+    "_comment": "Config with flat values",
+    "match_job_name": "pull-request-tests",
+    "ratio_job_name": "main-branch-tests",
+    "test_name_regex": "TestLoadFlakeConfigFile",
+    "classname": "TestLoadFlakeConfigFile",
+    "ratio_threshold": 10
+  }
+]
