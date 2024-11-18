@@ -39,7 +39,7 @@ func TestConstructSlackMessage(t *testing.T) {
 			testsSuites, err := junit.Ingest(sample)
 			assert.NoError(t, err)
 
-			suites, err := j.findFailedTests(testsSuites)
+			suites, err := j.getMergedFailedTests(testsSuites)
 			assert.NoError(t, err, "If this fails, it probably indicates a problem with the sample junit report rather than the code")
 			assert.NotNil(t, suites, "If this fails, it probably indicates a problem with the sample junit report rather than the code")
 

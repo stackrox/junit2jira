@@ -4,7 +4,7 @@ Convert test failures to jira issues
 
 ### Build
 ```shell
-go build ./...
+go build  -o . ./...
 ```
 
 ### Test
