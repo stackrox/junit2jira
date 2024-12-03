@@ -109,7 +109,7 @@ func run(p params) error {
 		jiraClient: jiraClient,
 	}
 
-	testSuites, err := junit.IngestDir(p.junitReportsDir)
+	testSuites, err := testcase.LoadTestSuites(p.junitReportsDir)
 	if err != nil {
 		log.Fatalf("could not read files: %s", err)
 	}

@@ -3,10 +3,13 @@ package testcase
 import (
 	"fmt"
 	"github.com/joshdk/go-junit"
+	"slices"
 	"strings"
 )
 
 const subTestFormat = "\nSub test %s: %s"
+const fallbackName = "fallback-name"
+const fallbackClassname = "fallback-classname"
 
 type TestCase struct {
 	Name      string
@@ -17,6 +20,66 @@ type TestCase struct {
 	Stderr    string
 	Error     string
 	IsSubtest bool
+}
+
+type ignoreTestCase struct {
+	Name      string
+	Classname string
+}
+
+var ignoreList = []ignoreTestCase{
+	{Name: "", Classname: "runtime.MemStats"},
+}
+
+// LoadTestSuites loads all reports in provided directory.
+func LoadTestSuites(reportDir string) ([]junit.Suite, error) {
+	testSuites, err := junit.IngestDir(reportDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return getClearedSuites(testSuites), nil
+}
+
+func deleteHelperTest(testElem junit.Test) bool {
+	for _, ignore := range ignoreList {
+		if testElem.Name == ignore.Name && testElem.Classname == ignore.Classname {
+			return true
+		}
+	}
+
+	return false
+}
+
+func addFallbacks(tests []junit.Test) []junit.Test {
+	for i, _ := range tests {
+		if tests[i].Classname == "" {
+			tests[i].Classname = fallbackClassname
+		}
+
+		if tests[i].Name == "" {
+			tests[i].Name = fallbackName
+		}
+	}
+
+	return tests
+}
+
+// getClearedSuites recursively removes ignored tests.
+func getClearedSuites(suites []junit.Suite) []junit.Suite {
+	resSuites := make([]junit.Suite, 0, len(suites))
+	for _, suite := range suites {
+		suite.Suites = getClearedSuites(suite.Suites)
+		suite.Tests = addFallbacks(slices.DeleteFunc(suite.Tests, deleteHelperTest))
+
+		// Filter out empty suites.
+		if len(suite.Suites) == 0 && len(suite.Tests) == 0 {
+			continue
+		}
+		resSuites = append(resSuites, suite)
+	}
+
+	return resSuites
 }
 
 func (tc *TestCase) addSubTest(subTest junit.Test) {

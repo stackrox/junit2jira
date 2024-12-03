@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" errors="1">
+	<testsuite name="github.com/stackrox/rox/pkg/grpc" tests="1" failures="0" errors="1" id="0" hostname="test" time="28.018" timestamp="2024-12-05T18:53:27+01:00">
+		<testcase name="Test_APIServerSuite/Test_TwoTestsStartingAPIs" classname="github.com/stackrox/rox/pkg/grpc" time="0.000">
+			<error message="No test result found"><![CDATA[    testutils.go:94: Stopping [2] listeners
+    testutils.go:87: [http handler listener: stopped]
+    testutils.go:87: [gRPC server listener: not stopped in loop. Comparing with grpcServer pointer with listener.srv pointer (0xc002ab2e00 : 0xc002ab2e00)]
+    server_test.go:229: -----------------------------------------------
+    server_test.go:230:  STACK TRACE INFO
+    server_test.go:231: -----------------------------------------------
+]]></error>
+		</testcase>
+	</testsuite>
+	<testsuite name="" tests="1" failures="0" errors="0" id="1" hostname="test" time="0.000" timestamp="2024-12-05T18:53:27+01:00">
+		<testcase name="TestLogInternalErrorInterceptor" classname="github.com/stackrox/rox/pkg/grpc/authz/user" time="0.000"></testcase>
+	</testsuite>
+</testsuites>

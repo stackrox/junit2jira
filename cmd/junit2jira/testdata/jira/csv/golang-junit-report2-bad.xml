@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" errors="3">
+	<testsuite name="runtime.MemStats" tests="1" failures="0" errors="1" id="0" hostname="test" time="0.000" timestamp="2024-12-05T18:53:27+01:00">
+		<testcase name="" classname="runtime.MemStats" time="0.000">
+			<error message="Build error"><![CDATA[# Alloc = 63549840
+# TotalAlloc = 140555368
+# Sys = 91578648
+# Lookups = 0
+# Mallocs = 970690
+# Frees = 649401]]></error>
+		</testcase>
+	</testsuite>
+	<testsuite name="" tests="1" failures="0" errors="1" id="1" hostname="test" time="0.000" timestamp="2024-12-05T18:53:27+01:00">
+		<testcase name="TestNoClassname" classname="" time="0.000"></testcase>
+	</testsuite>
+	<testsuite name="" tests="1" failures="0" errors="1" id="2" hostname="test" time="0.000" timestamp="2024-12-05T18:53:27+01:00">
+		<testcase name="" classname="TestNoName" time="0.000"></testcase>
+	</testsuite>
+</testsuites>

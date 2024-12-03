@@ -3,18 +3,18 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"github.com/stackrox/junit2jira/pkg/testcase"
 	"net/url"
 	"testing"
 
 	"github.com/andygrunwald/go-jira"
-	"github.com/joshdk/go-junit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseJunitReport(t *testing.T) {
 	t.Run("not existing", func(t *testing.T) {
-		tests, err := junit.IngestDir("not existing")
+		tests, err := testcase.LoadTestSuites("not existing")
 		assert.Error(t, err)
 		assert.Nil(t, tests)
 	})
@@ -22,7 +22,7 @@ func TestParseJunitReport(t *testing.T) {
 		j := junit2jira{
 			params: params{junitReportsDir: "testdata/jira/report.xml"},
 		}
-		testsSuites, err := junit.IngestDir(j.junitReportsDir)
+		testsSuites, err := testcase.LoadTestSuites(j.junitReportsDir)
 		assert.NoError(t, err)
 		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
@@ -47,7 +47,7 @@ func TestParseJunitReport(t *testing.T) {
 		j := junit2jira{
 			params: params{junitReportsDir: "testdata/jira/report.xml", JobName: "job-name", threshold: 1},
 		}
-		testsSuites, err := junit.IngestDir(j.junitReportsDir)
+		testsSuites, err := testcase.LoadTestSuites(j.junitReportsDir)
 		assert.NoError(t, err)
 		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
@@ -65,7 +65,7 @@ github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssu
 		j := junit2jira{
 			params: params{junitReportsDir: "testdata/jira", JobName: "job-name", BuildId: "1", threshold: 3},
 		}
-		testsSuites, err := junit.IngestDir(j.junitReportsDir)
+		testsSuites, err := testcase.LoadTestSuites(j.junitReportsDir)
 		assert.NoError(t, err)
 		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
@@ -75,6 +75,7 @@ github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssu
 			[]j2jTestCase{
 				{
 					Message: `DefaultPoliciesTest / Verify policy Apache Struts  CVE-2017-5638 is triggered FAILED
+github.com/stackrox/rox/pkg/grpc / Test_APIServerSuite/Test_TwoTestsStartingAPIs FAILED
 central-basic / step 90-activate-scanner-v4 FAILED
 github.com/stackrox/rox/pkg/booleanpolicy/evaluator / TestDifferentBaseTypes FAILED
 github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssuerIntegrationTests FAILED
@@ -93,7 +94,7 @@ command-line-arguments / TestTimeout FAILED
 		j := junit2jira{
 			params: params{junitReportsDir: "testdata/jira", BuildId: "1"},
 		}
-		testsSuites, err := junit.IngestDir(j.junitReportsDir)
+		testsSuites, err := testcase.LoadTestSuites(j.junitReportsDir)
 		assert.NoError(t, err)
 		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
@@ -136,6 +137,20 @@ command-line-arguments / TestTimeout FAILED
 						"\tat DefaultPoliciesTest.Verify policy #policyName is triggered(DefaultPoliciesTest.groovy:181)\n",
 				},
 				{
+					Name:    "Test_APIServerSuite/Test_TwoTestsStartingAPIs",
+					Message: "No test result found",
+					Stdout:  "",
+					Suite:   "github.com/stackrox/rox/pkg/grpc",
+					BuildId: "1",
+					Error: `    testutils.go:94: Stopping [2] listeners
+    testutils.go:87: [http handler listener: stopped]
+    testutils.go:87: [gRPC server listener: not stopped in loop. Comparing with grpcServer pointer with listener.srv pointer (0xc002ab2e00 : 0xc002ab2e00)]
+    server_test.go:229: -----------------------------------------------
+    server_test.go:230:  STACK TRACE INFO
+    server_test.go:231: -----------------------------------------------
+`,
+				},
+				{
 					Name:    "TestDifferentBaseTypes",
 					Suite:   "github.com/stackrox/rox/pkg/booleanpolicy/evaluator",
 					Message: "Failed\nSub test TestDifferentBaseTypes/base_ts,_query_by_relative,_does_not_match: Failed\nSub test TestDifferentBaseTypes/base_ts,_query_by_relative,_does_not_match/on_fully_hydrated_object: Failed\nSub test TestDifferentBaseTypes/base_ts,_query_by_relative,_does_not_match/on_augmented_object: Failed",
@@ -176,9 +191,9 @@ command-line-arguments / TestTimeout FAILED
 	})
 	t.Run("gradle", func(t *testing.T) {
 		j := junit2jira{
-			params: params{junitReportsDir: "testdata/jira/TEST-DefaultPoliciesTest.xml", BuildId: "1"},
+			params: params{junitReportsDir: "testdata/jira/csv/TEST-DefaultPoliciesTest.xml", BuildId: "1"},
 		}
-		testsSuites, err := junit.IngestDir(j.junitReportsDir)
+		testsSuites, err := testcase.LoadTestSuites(j.junitReportsDir)
 		assert.NoError(t, err)
 		tests, err := j.getMergedFailedTests(testsSuites)
 		assert.NoError(t, err)
@@ -304,19 +319,17 @@ waitForViolation(deploymentName,  policyName, 60)
 
 func TestCsvOutput(t *testing.T) {
 	p := params{
-		BuildId:      "1",
-		JobName:      "comma ,",
-		Orchestrator: "test",
-		BuildTag:     "0.0.0",
-		BaseLink:     `quote "`,
-		BuildLink:    "buildLink",
-		timestamp:    "time",
+		BuildId:         "1",
+		JobName:         "comma ,",
+		Orchestrator:    "test",
+		BuildTag:        "0.0.0",
+		BaseLink:        `quote "`,
+		BuildLink:       "buildLink",
+		timestamp:       "time",
+		junitReportsDir: "testdata/jira/csv",
 	}
 	buf := bytes.NewBufferString("")
-	testSuites, err := junit.IngestFiles([]string{
-		"testdata/jira/TEST-DefaultPoliciesTest.xml",
-		"testdata/jira/kuttl-report.xml",
-	})
+	testSuites, err := testcase.LoadTestSuites(p.junitReportsDir)
 	assert.NoError(t, err)
 	err = junit2csv(testSuites, p, buf)
 	assert.NoError(t, err)
@@ -337,6 +350,10 @@ func TestCsvOutput(t *testing.T) {
 1,time,DefaultPoliciesTest,Verify that built-in services don't trigger unexpected alerts,0,skipped,"comma ,",0.0.0
 1,time,DefaultPoliciesTest,Verify that alert counts API is consistent with alerts,0,skipped,"comma ,",0.0.0
 1,time,DefaultPoliciesTest,Verify that alert groups API is consistent with alerts,0,skipped,"comma ,",0.0.0
+1,time,github.com/stackrox/rox/pkg/grpc,Test_APIServerSuite/Test_TwoTestsStartingAPIs,0,error,"comma ,",0.0.0
+1,time,github.com/stackrox/rox/pkg/grpc/authz/user,TestLogInternalErrorInterceptor,0,passed,"comma ,",0.0.0
+1,time,fallback-classname,TestNoClassname,0,passed,"comma ,",0.0.0
+1,time,TestNoName,fallback-name,0,passed,"comma ,",0.0.0
 1,time,central-basic,setup,0,passed,"comma ,",0.0.0
 1,time,central-basic,step 0-image-pull-secrets,0,passed,"comma ,",0.0.0
 1,time,central-basic,step 10-central-cr,0,passed,"comma ,",0.0.0
