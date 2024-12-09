@@ -75,6 +75,8 @@ github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssu
 			[]j2jTestCase{
 				{
 					Message: `DefaultPoliciesTest / Verify policy Apache Struts  CVE-2017-5638 is triggered FAILED
+github.com/stackrox/rox/pkg/grpc / Test_APIServerSuite/Test_TwoTestsStartingAPIs FAILED
+runtime.MemStats /  FAILED
 central-basic / step 90-activate-scanner-v4 FAILED
 github.com/stackrox/rox/pkg/booleanpolicy/evaluator / TestDifferentBaseTypes FAILED
 github.com/stackrox/rox/sensor/kubernetes/localscanner / TestLocalScannerTLSIssuerIntegrationTests FAILED
@@ -134,6 +136,31 @@ command-line-arguments / TestTimeout FAILED
 						"false            qadefpolstruts   Apache Struts: CVE-2017-5638\n" +
 						"\n" +
 						"\tat DefaultPoliciesTest.Verify policy #policyName is triggered(DefaultPoliciesTest.groovy:181)\n",
+				},
+				{
+					Name:    "Test_APIServerSuite/Test_TwoTestsStartingAPIs",
+					Message: "No test result found",
+					Stdout:  "",
+					Suite:   "github.com/stackrox/rox/pkg/grpc",
+					BuildId: "1",
+					Error: `    testutils.go:94: Stopping [2] listeners
+    testutils.go:87: [http handler listener: stopped]
+    testutils.go:87: [gRPC server listener: not stopped in loop. Comparing with grpcServer pointer with listener.srv pointer (0xc002ab2e00 : 0xc002ab2e00)]
+    server_test.go:229: -----------------------------------------------
+    server_test.go:230:  STACK TRACE INFO
+    server_test.go:231: -----------------------------------------------
+`,
+				},
+				{
+					Message: "Build error",
+					Suite:   "runtime.MemStats",
+					BuildId: "1",
+					Error: `# Alloc = 63549840
+# TotalAlloc = 140555368
+# Sys = 91578648
+# Lookups = 0
+# Mallocs = 970690
+# Frees = 649401`,
 				},
 				{
 					Name:    "TestDifferentBaseTypes",
@@ -316,6 +343,8 @@ func TestCsvOutput(t *testing.T) {
 	testSuites, err := junit.IngestFiles([]string{
 		"testdata/jira/TEST-DefaultPoliciesTest.xml",
 		"testdata/jira/kuttl-report.xml",
+		"testdata/jira/golang-junit-report1.xml",
+		"testdata/jira/golang-junit-report2-bad.xml",
 	})
 	assert.NoError(t, err)
 	err = junit2csv(testSuites, p, buf)
@@ -386,6 +415,8 @@ func TestCsvOutput(t *testing.T) {
 1,time,sc-basic,step 910-,0,passed,"comma ,",0.0.0
 1,time,sc-basic,step 950-delete-secured-cluster-cr,0,passed,"comma ,",0.0.0
 1,time,sc-basic,step 990-,0,passed,"comma ,",0.0.0
+1,time,github.com/stackrox/rox/pkg/grpc,Test_APIServerSuite/Test_TwoTestsStartingAPIs,0,error,"comma ,",0.0.0
+1,time,github.com/stackrox/rox/pkg/grpc/authz/user,TestLogInternalErrorInterceptor,0,passed,"comma ,",0.0.0
 `
 	assert.Equal(t, expected, buf.String())
 

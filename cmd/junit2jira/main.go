@@ -476,6 +476,10 @@ func junit2csv(testSuites []junit.Suite, p params, output io.Writer) error {
 	return nil
 }
 
+func isValidTestRecord(p params, tc junit.Test) bool {
+	return p.BuildId != "" && p.timestamp != "" && p.JobName != "" && tc.Classname != "" && tc.Name != "" && tc.Status != ""
+}
+
 func testSuiteToCSV(ts junit.Suite, p params, w *csv.Writer) error {
 	for _, subTs := range ts.Suites {
 		if err := testSuiteToCSV(subTs, p, w); err != nil {
@@ -483,6 +487,12 @@ func testSuiteToCSV(ts junit.Suite, p params, w *csv.Writer) error {
 		}
 	}
 	for _, tc := range ts.Tests {
+		if !isValidTestRecord(p, tc) {
+			log.Warnf("Skip test: %q %q - missing all required fields for test", tc.Name, tc.Classname)
+
+			continue
+		}
+
 		duration := fmt.Sprintf("%d", tc.Duration.Milliseconds())
 		row := []string{
 			p.BuildId,         // BuildId
