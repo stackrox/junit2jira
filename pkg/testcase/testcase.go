@@ -28,10 +28,16 @@ type ignoreTestCase struct {
 }
 
 var ignoreList = []ignoreTestCase{
+	// Go unit test crashes include stack traces of all threads, as well as some memory stats.
+	// We use go-junit-report which ingests plaintext-but-sort-of-machine-readable go test output
+	// and produces junit XML files. This tool seems to get confused by the crash dump,
+	// and thinks there is a failure in there from a (non-existent) go package runtime.MemStats,
+	// with an empty test case name.
 	{Name: "", Classname: "runtime.MemStats"},
 }
 
 // LoadTestSuites loads all reports in provided directory.
+// It omits certain reports which are known to be useless, and fills in empty class and test case names.
 func LoadTestSuites(reportDir string) ([]junit.Suite, error) {
 	testSuites, err := junit.IngestDir(reportDir)
 	if err != nil {
@@ -51,18 +57,23 @@ func deleteHelperTest(testElem junit.Test) bool {
 	return false
 }
 
+// Makes sure the passed tests all have class and test names set to a non-empty value.
 func addFallbacks(tests []junit.Test) []junit.Test {
-	for i, _ := range tests {
-		if tests[i].Classname == "" {
-			tests[i].Classname = fallbackClassname
+	testsWithFallback := make([]junit.Test, len(tests))
+
+	for i, test := range tests {
+		if test.Classname == "" {
+			test.Classname = fallbackClassname
 		}
 
-		if tests[i].Name == "" {
-			tests[i].Name = fallbackName
+		if test.Name == "" {
+			test.Name = fallbackName
 		}
+
+		testsWithFallback[i] = test
 	}
 
-	return tests
+	return testsWithFallback
 }
 
 // getClearedSuites recursively removes ignored tests.
