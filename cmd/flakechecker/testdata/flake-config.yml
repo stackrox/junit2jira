@@ -1,0 +1,13 @@
+# Config with regex
+- jobNameRegex: 'pr-.*'
+  className: TestLoadFlakeConfigFile
+  testNameRegex: 'TestLoadFlakeConf.*'
+  ratioJobName: main-branch-tests
+  ratioThreshold: 5
+
+# Config with flat values
+- jobNameRegex: pull-request-tests
+  className: TestLoadFlakeConfigFile
+  testNameRegex: TestLoadFlakeConfigFile
+  ratioJobName: main-branch-tests
+  ratioThreshold: 10
