@@ -7,6 +7,7 @@ require (
 	github.com/andygrunwald/go-jira v1.16.0
 	github.com/carlmjohnson/versioninfo v0.22.5
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/joshdk/go-junit v0.0.0-20210226021600-6145f504ca0d
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.2
@@ -38,6 +39,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/kr/pretty v0.2.0 // indirect
