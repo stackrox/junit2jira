@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"github.com/stackrox/junit2jira/pkg/logger"
 	"github.com/stackrox/junit2jira/pkg/testcase"
 	"html/template"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -20,9 +21,9 @@ import (
 	"github.com/andygrunwald/go-jira"
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/hashicorp/go-multierror"
-	junit "github.com/joshdk/go-junit"
+	"github.com/hashicorp/go-retryablehttp"
+	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 )
 
@@ -70,6 +71,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	customFormatter := new(log.TextFormatter)
+	customFormatter.TimestampFormat = time.Stamp
+	customFormatter.FullTimestamp = true
+	log.SetFormatter(customFormatter)
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
@@ -92,8 +97,9 @@ type testIssue struct {
 }
 
 func run(p params) error {
-	transport := http.DefaultTransport
-
+	retryClient := retryablehttp.NewClient()
+	retryClient.Logger = logger.NewLeveled()
+	transport := retryClient.StandardClient().Transport
 	tp := jira.PATAuthTransport{
 		Token:     os.Getenv("JIRA_TOKEN"),
 		Transport: transport,
