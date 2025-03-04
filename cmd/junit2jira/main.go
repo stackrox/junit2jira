@@ -98,7 +98,7 @@ type testIssue struct {
 
 func run(p params) error {
 	retryClient := retryablehttp.NewClient()
-	retryClient.Logger = retryablehttp.LeveledLogger(logger.Leveled{log.StandardLogger()})
+	retryClient.Logger = logger.NewLeveled()
 	transport := retryClient.StandardClient().Transport
 	tp := jira.PATAuthTransport{
 		Token:     os.Getenv("JIRA_TOKEN"),
