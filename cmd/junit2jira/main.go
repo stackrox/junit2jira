@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"github.com/stackrox/junit2jira/pkg/logger"
 	"github.com/stackrox/junit2jira/pkg/testcase"
 	"html/template"
 	"io"
@@ -22,7 +24,6 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 )
 
@@ -70,6 +71,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	customFormatter := new(log.TextFormatter)
+	customFormatter.TimestampFormat = time.Stamp
+	customFormatter.FullTimestamp = true
+	log.SetFormatter(customFormatter)
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
@@ -91,41 +96,9 @@ type testIssue struct {
 	testCase j2jTestCase
 }
 
-//region logger
-type leveledLogger struct {
-	*log.Logger
-}
-
-func (l leveledLogger) withFields(keysAndValues []interface{}) *log.Entry {
-	f := make(map[string]interface{})
-
-	for i := 0; i < len(keysAndValues)-1; i += 2 {
-		f[keysAndValues[i].(string)] = keysAndValues[i+1]
-	}
-
-	return l.WithFields(f)
-}
-
-func (l leveledLogger) Error(msg string, keysAndValues ...interface{}) {
-	l.withFields(keysAndValues).Error(msg)
-}
-
-func (l leveledLogger) Info(msg string, keysAndValues ...interface{}) {
-	l.withFields(keysAndValues).Info(msg)
-}
-func (l leveledLogger) Debug(msg string, keysAndValues ...interface{}) {
-	l.withFields(keysAndValues).Debug(msg)
-}
-
-func (l leveledLogger) Warn(msg string, keysAndValues ...interface{}) {
-	l.withFields(keysAndValues).Warn(msg)
-}
-
-//endregion
-
 func run(p params) error {
 	retryClient := retryablehttp.NewClient()
-	retryClient.Logger = retryablehttp.LeveledLogger(leveledLogger{log.StandardLogger()})
+	retryClient.Logger = retryablehttp.LeveledLogger(logger.Leveled{log.StandardLogger()})
 	transport := retryClient.StandardClient().Transport
 	tp := jira.PATAuthTransport{
 		Token:     os.Getenv("JIRA_TOKEN"),
