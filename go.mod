@@ -8,7 +8,7 @@ require (
 	github.com/carlmjohnson/versioninfo v0.22.5
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-retryablehttp v0.7.7
-	github.com/joshdk/go-junit v0.0.0-20210226021600-6145f504ca0d
+	github.com/joshdk/go-junit v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slack-go/slack v0.16.0
