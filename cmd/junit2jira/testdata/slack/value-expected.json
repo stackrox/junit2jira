@@ -5,6 +5,7 @@
       {
         "type": "header",
         "text": {
+          "emoji": false,
           "type": "plain_text",
           "text": "Failed tests"
         }
@@ -12,6 +13,7 @@
       {
         "type": "section",
         "text": {
+          "emoji": false,
           "type": "plain_text",
           "text": "FOO-1: MyTest: My Test Case 3"
         }
@@ -24,6 +26,7 @@
       {
         "type": "header",
         "text": {
+          "emoji": false,
           "type": "plain_text",
           "text": "FOO-1: MyTest: My Test Case 3"
         }
@@ -38,6 +41,7 @@
       {
         "type": "section",
         "text": {
+          "emoji": false,
           "type": "plain_text",
           "text": "Sometimes we only have the value. Here's some info about the failure in My Test Case 3"
         }
