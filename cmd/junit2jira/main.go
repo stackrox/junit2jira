@@ -455,7 +455,7 @@ func logError(e error, response *jira.Response) {
 	if err != nil {
 		log.WithError(e).WithField("StatusCode", response.StatusCode).Errorf("Could not read body: %q", err)
 	} else {
-		log.WithError(e).WithField("StatusCode", response.StatusCode).Error(string(all))
+		log.WithError(e).WithField("StatusCode", response.StatusCode).Error("Server response: "+string(all))
 	}
 }
 
