@@ -365,7 +365,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	addComment, response, err := j.jiraClient.Issue.AddComment(issue.ID, &comment)
 	if err != nil {
 		logError(err, response)
-		return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
+		return nil, fmt.Errorf("could not comment on issue %s: %w", summary, err)
 	}
 	logEntry(issue.Key, summary).Infof("Created comment %s", addComment.ID)
 	return &issueWithTestCase, nil
