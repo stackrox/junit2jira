@@ -203,7 +203,7 @@ func (j junit2jira) createSlackMessage(tc []*testIssue) error {
 			return fmt.Errorf("could not create file %q: %w", j.slackOutput, err)
 		}
 		out = file
-		defer file.Close()
+		defer file.Close() //nolint:errcheck
 	}
 	_, err = fmt.Fprintf(out, "%s", string(b))
 	if err != nil {
@@ -223,7 +223,7 @@ func (j junit2jira) createHtml(issues []*jira.Issue) error {
 			return fmt.Errorf("could not create file %q: %w", j.htmlOutput, err)
 		}
 		out = file
-		defer file.Close()
+		defer file.Close() //nolint:errcheck
 	}
 	return j.renderHtml(issues, out)
 }
@@ -259,7 +259,7 @@ func (j junit2jira) createCsv(testSuites []junit.Suite) error {
 			return fmt.Errorf("could not create file %s: %w", j.csvOutput, err)
 		}
 		out = file
-		defer file.Close()
+		defer file.Close() //nolint:errcheck
 	}
 	return junit2csv(testSuites, j.params, out)
 }
@@ -382,7 +382,7 @@ func (j junit2jira) writeSummary(tc []*testIssue) error {
 			return fmt.Errorf("could not create file %s: %w", j.summaryOutput, err)
 		}
 		out = file
-		defer file.Close()
+		defer file.Close() //nolint:errcheck
 	}
 
 	return generateSummary(tc, out)

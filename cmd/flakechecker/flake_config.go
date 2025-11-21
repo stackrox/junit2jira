@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"regexp"
+
+	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 )
 
 // flakeDetectionPolicyConfig represents configuration used by flakechecker to evaluate failed tests.
@@ -82,7 +83,7 @@ func loadFlakeConfigFile(fileName string) ([]*flakeDetectionPolicy, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("open flake config file: %s", fileName))
 	}
-	defer ymlConfigFile.Close()
+	defer ymlConfigFile.Close() //nolint:errcheck
 
 	ymlConfigFileData, err := io.ReadAll(ymlConfigFile)
 	if err != nil {
