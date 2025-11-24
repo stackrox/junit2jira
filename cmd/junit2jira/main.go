@@ -7,9 +7,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"github.com/stackrox/junit2jira/pkg/logger"
-	"github.com/stackrox/junit2jira/pkg/testcase"
 	"html/template"
 	"io"
 	"net/url"
@@ -24,7 +21,10 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
+	"github.com/stackrox/junit2jira/pkg/logger"
+	"github.com/stackrox/junit2jira/pkg/testcase"
 )
 
 const (
@@ -337,7 +337,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		}
 		issue = newIssue(j.jiraProject, summary, description)
 		create, response, err := j.jiraClient.Issue.Create(issue)
-		if response != nil && err != nil {
+		if err != nil {
 			logError(err, response)
 			return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
 		}
@@ -363,9 +363,9 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	}
 
 	addComment, response, err := j.jiraClient.Issue.AddComment(issue.ID, &comment)
-	if response != nil && err != nil {
+	if err != nil {
 		logError(err, response)
-		return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
+		return nil, fmt.Errorf("could not comment on issue %s: %w", summary, err)
 	}
 	logEntry(issue.Key, summary).Infof("Created comment %s", addComment.ID)
 	return &issueWithTestCase, nil
@@ -445,12 +445,17 @@ func findMatchingIssue(search []jira.Issue, summary string) *jira.Issue {
 }
 
 func logError(e error, response *jira.Response) {
+	if response == nil {
+		log.WithError(e).Error("no response")
+		return
+	}
+
 	all, err := io.ReadAll(response.Body)
 
 	if err != nil {
 		log.WithError(e).WithField("StatusCode", response.StatusCode).Errorf("Could not read body: %q", err)
 	} else {
-		log.WithError(e).WithField("StatusCode", response.StatusCode).Error(string(all))
+		log.WithError(e).WithField("StatusCode", response.StatusCode).Error("Server response: "+string(all))
 	}
 }
 

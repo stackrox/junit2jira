@@ -3,11 +3,11 @@ package main
 import (
 	"bytes"
 	_ "embed"
-	"github.com/stackrox/junit2jira/pkg/testcase"
 	"net/url"
 	"testing"
 
 	"github.com/andygrunwald/go-jira"
+	"github.com/stackrox/junit2jira/pkg/testcase"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
