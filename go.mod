@@ -3,7 +3,7 @@ module github.com/stackrox/junit2jira
 go 1.24.0
 
 require (
-	cloud.google.com/go/bigquery v1.73.0
+	cloud.google.com/go/bigquery v1.73.1
 	github.com/andygrunwald/go-jira v1.17.0
 	github.com/carlmjohnson/versioninfo v0.22.5
 	github.com/hashicorp/go-multierror v1.1.1
