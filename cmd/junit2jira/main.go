@@ -355,7 +355,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	if issue == nil {
 		logEntry(NA, summary).Info("Issue not found. Creating new issue...")
 		if j.dryRun {
-			logEntry(NA, summary).Debugf("Dry run: will just print issue\n %q", description)
+			logEntry(NA, summary).Debug("Dry run: would create new issue")
 			return nil, nil
 		}
 		issue = newIssue(j.jiraProject, summary, description)
@@ -374,29 +374,15 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		return &issueWithTestCase, nil
 	}
 
-	// Create ADF (Atlassian Document Format) comment with plain text
+	// Use the same ADF description for the comment
 	comment := &models.CommentPayloadScheme{
-		Body: &models.CommentNodeScheme{
-			Version: 1,
-			Type:    "doc",
-			Content: []*models.CommentNodeScheme{
-				{
-					Type: "paragraph",
-					Content: []*models.CommentNodeScheme{
-						{
-							Type: "text",
-							Text: description,
-						},
-					},
-				},
-			},
-		},
+		Body: description,
 	}
 
 	logEntry(issue.Key, issue.Fields.Summary).Info("Found issue. Creating a comment...")
 
 	if j.dryRun {
-		logEntry(NA, issue.Fields.Summary).Debugf("Dry run: will just print comment:\n%q", description)
+		logEntry(NA, issue.Fields.Summary).Debug("Dry run: would add comment to existing issue")
 		return &issueWithTestCase, nil
 	}
 
@@ -457,7 +443,7 @@ func logEntry(id, summary string) *log.Entry {
 	return log.WithField("ID", id).WithField("summary", summary)
 }
 
-func newIssue(project string, summary string, description string) *models.IssueScheme {
+func newIssue(project string, summary string, description *models.CommentNodeScheme) *models.IssueScheme {
 	return &models.IssueScheme{
 		Fields: &models.IssueFieldsScheme{
 			IssueType: &models.IssueTypeScheme{
@@ -466,23 +452,9 @@ func newIssue(project string, summary string, description string) *models.IssueS
 			Project: &models.ProjectScheme{
 				Key: project,
 			},
-			Summary: summary,
-			Description: &models.CommentNodeScheme{
-				Version: 1,
-				Type:    "doc",
-				Content: []*models.CommentNodeScheme{
-					{
-						Type: "paragraph",
-						Content: []*models.CommentNodeScheme{
-							{
-								Type: "text",
-								Text: description,
-							},
-						},
-					},
-				},
-			},
-			Labels: []string{"CI_Failure"},
+			Summary:     summary,
+			Description: description,
+			Labels:      []string{"CI_Failure"},
 		},
 	}
 }
@@ -590,34 +562,6 @@ func (j junit2jira) mergeFailedTests(failedTests []j2jTestCase) ([]j2jTestCase, 
 }
 
 const (
-	desc = `
-{{- if .Message }}
-{code:title=Message|borderStyle=solid}
-{{ .Message | truncate }}
-{code}
-{{- end }}
-{{- if .Stderr }}
-{code:title=STDERR|borderStyle=solid}
-{{ .Stderr | truncate }}
-{code}
-{{- end }}
-{{- if .Stdout }}
-{code:title=STDOUT|borderStyle=solid}
-{{ .Stdout | truncate }}
-{code}
-{{- end }}
-{{- if .Error }}
-{code:title=ERROR|borderStyle=solid}
-{{ .Error | truncate }}
-{code}
-{{- end }}
-
-||    ENV     ||      Value           ||
-| BUILD ID     | [{{- .BuildId -}}|{{- .BuildLink -}}]|
-| BUILD TAG    | [{{- .BuildTag -}}|{{- .BaseLink -}}]|
-| JOB NAME     | {{- .JobName -}}      |
-| ORCHESTRATOR | {{- .Orchestrator -}} |
-`
 	summaryTpl = `{{ (print .Suite " / " .Name) | truncateSummary }} FAILED`
 )
 
@@ -675,8 +619,284 @@ func newJ2jTestCase(testCase testcase.TestCase, p params) j2jTestCase {
 	}
 }
 
-func (tc *j2jTestCase) description() (string, error) {
-	return render(*tc, desc)
+func (tc *j2jTestCase) description() (*models.CommentNodeScheme, error) {
+	return tc.buildADFDescription(), nil
+}
+
+// buildADFDescription creates an Atlassian Document Format structure for the issue description
+func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
+	content := []*models.CommentNodeScheme{}
+
+	// Add Message section if present
+	if tc.Message != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "Message"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Message)},
+			},
+		})
+	}
+
+	// Add STDERR section if present
+	if tc.Stderr != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "STDERR"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Stderr)},
+			},
+		})
+	}
+
+	// Add STDOUT section if present
+	if tc.Stdout != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "STDOUT"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Stdout)},
+			},
+		})
+	}
+
+	// Add ERROR section if present
+	if tc.Error != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "ERROR"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Error)},
+			},
+		})
+	}
+
+	// Add Build Information table
+	content = append(content, &models.CommentNodeScheme{
+		Type: "heading",
+		Attrs: map[string]interface{}{
+			"level": 3,
+		},
+		Content: []*models.CommentNodeScheme{
+			{Type: "text", Text: "Build Information"},
+		},
+	})
+
+	// Create table for build info
+	tableRows := []*models.CommentNodeScheme{
+		// Header row
+		{
+			Type: "tableRow",
+			Content: []*models.CommentNodeScheme{
+				{
+					Type: "tableHeader",
+					Content: []*models.CommentNodeScheme{
+						{Type: "paragraph", Content: []*models.CommentNodeScheme{
+							{Type: "text", Text: "ENV", Marks: []*models.MarkScheme{{Type: "strong"}}},
+						}},
+					},
+				},
+				{
+					Type: "tableHeader",
+					Content: []*models.CommentNodeScheme{
+						{Type: "paragraph", Content: []*models.CommentNodeScheme{
+							{Type: "text", Text: "Value", Marks: []*models.MarkScheme{{Type: "strong"}}},
+						}},
+					},
+				},
+			},
+		},
+	}
+
+	// Build ID row with link
+	buildIDContent := []*models.CommentNodeScheme{}
+	if tc.BuildLink != "" {
+		buildIDContent = append(buildIDContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: tc.BuildId,
+			Marks: []*models.MarkScheme{{
+				Type: "link",
+				Attrs: map[string]interface{}{
+					"href": tc.BuildLink,
+				},
+			}},
+		})
+	} else {
+		buildIDContent = append(buildIDContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: tc.BuildId,
+		})
+	}
+
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "BUILD ID"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: buildIDContent},
+				},
+			},
+		},
+	})
+
+	// Build TAG row with link
+	buildTagContent := []*models.CommentNodeScheme{}
+	buildTagText := tc.BuildTag
+	if buildTagText == "" {
+		buildTagText = " " // Use space for empty values to ensure text field is present
+	}
+	if tc.BaseLink != "" && tc.BuildTag != "" {
+		buildTagContent = append(buildTagContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: buildTagText,
+			Marks: []*models.MarkScheme{{
+				Type: "link",
+				Attrs: map[string]interface{}{
+					"href": tc.BaseLink,
+				},
+			}},
+		})
+	} else {
+		buildTagContent = append(buildTagContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: buildTagText,
+		})
+	}
+
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "BUILD TAG"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: buildTagContent},
+				},
+			},
+		},
+	})
+
+	// Job Name row
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "JOB NAME"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: tc.JobName},
+					}},
+				},
+			},
+		},
+	})
+
+	// Orchestrator row
+	orchestratorText := tc.Orchestrator
+	if orchestratorText == "" {
+		orchestratorText = " " // Use space for empty values to ensure text field is present
+	}
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "ORCHESTRATOR"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: orchestratorText},
+					}},
+				},
+			},
+		},
+	})
+
+	// Add the table to content
+	content = append(content, &models.CommentNodeScheme{
+		Type:    "table",
+		Content: tableRows,
+	})
+
+	return &models.CommentNodeScheme{
+		Version: 1,
+		Type:    "doc",
+		Content: content,
+	}
 }
 
 func (tc j2jTestCase) summary() (string, error) {
