@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/csv"
 	"encoding/json"
@@ -15,15 +16,14 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/andygrunwald/go-jira"
+	jira "github.com/ctreminiom/go-atlassian/v2/jira/v3"
+	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/hashicorp/go-multierror"
-	"github.com/hashicorp/go-retryablehttp"
 	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
-	"github.com/stackrox/junit2jira/pkg/logger"
 	"github.com/stackrox/junit2jira/pkg/testcase"
 )
 
@@ -91,24 +91,32 @@ type junit2jira struct {
 }
 
 type testIssue struct {
-	issue    *jira.Issue
+	issue    *models.IssueScheme
 	newJIRA  bool
 	testCase j2jTestCase
 }
 
 func run(p params) error {
-	retryClient := retryablehttp.NewClient()
-	retryClient.Logger = logger.NewLeveled()
-	transport := retryClient.StandardClient().Transport
-	tp := jira.PATAuthTransport{
-		Token:     os.Getenv("JIRA_TOKEN"),
-		Transport: transport,
+	// Check for username (email) for Basic Auth
+	jiraUser := os.Getenv("JIRA_USER")
+	jiraToken := os.Getenv("JIRA_TOKEN")
+	if jiraToken == "" {
+		jiraToken = os.Getenv("JIRA_PASSWORD") // backward compatibility
 	}
 
-	jiraClient, err := jira.NewClient(tp.Client(), p.jiraUrl.String())
+	if jiraUser == "" || jiraToken == "" {
+		log.Fatal("JIRA_USER (email) and JIRA_TOKEN are required for Jira Cloud authentication")
+	}
+
+	// Create Jira client using go-atlassian library
+	jiraClient, err := jira.New(nil, p.jiraUrl.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not create client for %s", p.jiraUrl)
 	}
+
+	// Set Basic Auth with email and API token
+	jiraClient.Auth.SetBasicAuth(jiraUser, jiraToken)
+	log.Info("Using Basic Auth (email + API token)")
 
 	j := &junit2jira{
 		params:     p,
@@ -140,7 +148,7 @@ func run(p params) error {
 		return errors.Wrap(err, "could not convert to slack")
 	}
 
-	jiraIssues := make([]*jira.Issue, 0, len(issues))
+	jiraIssues := make([]*models.IssueScheme, 0, len(issues))
 	for _, i := range issues {
 		jiraIssues = append(jiraIssues, i.issue)
 	}
@@ -212,7 +220,7 @@ func (j junit2jira) createSlackMessage(tc []*testIssue) error {
 	return nil
 }
 
-func (j junit2jira) createHtml(issues []*jira.Issue) error {
+func (j junit2jira) createHtml(issues []*models.IssueScheme) error {
 	if j.htmlOutput == "" || len(issues) == 0 {
 		return nil
 	}
@@ -229,11 +237,11 @@ func (j junit2jira) createHtml(issues []*jira.Issue) error {
 }
 
 type htmlData struct {
-	Issues  []*jira.Issue
+	Issues  []*models.IssueScheme
 	JiraUrl *url.URL
 }
 
-func (j junit2jira) renderHtml(issues []*jira.Issue, out io.Writer) error {
+func (j junit2jira) renderHtml(issues []*models.IssueScheme, out io.Writer) error {
 	t, err := template.New(j.htmlOutput).Parse(htmlOutputTemplate)
 	if err != nil {
 		return fmt.Errorf("could parse template: %w", err)
@@ -279,7 +287,7 @@ func (j junit2jira) createIssuesOrComments(failedTests []j2jTestCase) ([]*testIs
 	return issues, result
 }
 
-func (j junit2jira) linkIssues(issues []*jira.Issue) error {
+func (j junit2jira) linkIssues(issues []*models.IssueScheme) error {
 	const linkType = "Related" // link type may vay between jira versions and configurations
 
 	var result error
@@ -291,11 +299,19 @@ func (j junit2jira) linkIssues(issues []*jira.Issue) error {
 				continue
 			}
 
-			_, err := j.jiraClient.Issue.AddLink(&jira.IssueLink{
-				Type:         jira.IssueLinkType{Name: linkType},
-				OutwardIssue: &jira.Issue{Key: issue.Key},
-				InwardIssue:  &jira.Issue{Key: issues[y].Key},
-			})
+			payload := &models.LinkPayloadSchemeV3{
+				Type: &models.LinkTypeScheme{
+					Name: linkType,
+				},
+				InwardIssue: &models.LinkedIssueScheme{
+					Key: issues[y].Key,
+				},
+				OutwardIssue: &models.LinkedIssueScheme{
+					Key: issue.Key,
+				},
+			}
+
+			_, err := j.jiraClient.Issue.Link.Create(context.TODO(), payload)
 			if err != nil {
 				result = multierror.Append(result, err)
 				continue
@@ -317,13 +333,20 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	}
 	const NA = "?"
 	logEntry(NA, summary).Debug("Searching for issue")
-	search, response, err := j.jiraClient.Issue.Search(fmt.Sprintf(jql, j.jiraProject, summary), nil)
+	searchResult, response, err := j.jiraClient.Issue.Search.SearchJQL(
+		context.TODO(),
+		fmt.Sprintf(jql, j.jiraProject, summary),
+		[]string{"summary"}, // fields - request summary field
+		nil,                 // expand
+		50,                  // maxResults
+		"",                  // nextPageToken (empty for first page)
+	)
 	if err != nil {
 		logError(err, response)
 		return nil, fmt.Errorf("could not search: %w", err)
 	}
 
-	issue := findMatchingIssue(search, summary)
+	issue := findMatchingIssue(searchResult.Issues, summary)
 	issueWithTestCase := testIssue{
 		issue:    issue,
 		testCase: tc,
@@ -336,7 +359,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 			return nil, nil
 		}
 		issue = newIssue(j.jiraProject, summary, description)
-		create, response, err := j.jiraClient.Issue.Create(issue)
+		create, response, err := j.jiraClient.Issue.Create(context.TODO(), issue, nil)
 		if err != nil {
 			logError(err, response)
 			return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
@@ -351,8 +374,23 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		return &issueWithTestCase, nil
 	}
 
-	comment := jira.Comment{
-		Body: description,
+	// Create ADF (Atlassian Document Format) comment with plain text
+	comment := &models.CommentPayloadScheme{
+		Body: &models.CommentNodeScheme{
+			Version: 1,
+			Type:    "doc",
+			Content: []*models.CommentNodeScheme{
+				{
+					Type: "paragraph",
+					Content: []*models.CommentNodeScheme{
+						{
+							Type: "text",
+							Text: description,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	logEntry(issue.Key, issue.Fields.Summary).Info("Found issue. Creating a comment...")
@@ -362,7 +400,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		return &issueWithTestCase, nil
 	}
 
-	addComment, response, err := j.jiraClient.Issue.AddComment(issue.ID, &comment)
+	addComment, response, err := j.jiraClient.Issue.Comment.Add(context.TODO(), issue.Key, comment, nil)
 	if err != nil {
 		logError(err, response)
 		return nil, fmt.Errorf("could not comment on issue %s: %w", summary, err)
@@ -419,43 +457,55 @@ func logEntry(id, summary string) *log.Entry {
 	return log.WithField("ID", id).WithField("summary", summary)
 }
 
-func newIssue(project string, summary string, description string) *jira.Issue {
-	return &jira.Issue{
-		Fields: &jira.IssueFields{
-			Type: jira.IssueType{
+func newIssue(project string, summary string, description string) *models.IssueScheme {
+	return &models.IssueScheme{
+		Fields: &models.IssueFieldsScheme{
+			IssueType: &models.IssueTypeScheme{
 				Name: "Bug",
 			},
-			Project: jira.Project{
+			Project: &models.ProjectScheme{
 				Key: project,
 			},
-			Summary:     summary,
-			Description: description,
-			Labels:      []string{"CI_Failure"},
+			Summary: summary,
+			Description: &models.CommentNodeScheme{
+				Version: 1,
+				Type:    "doc",
+				Content: []*models.CommentNodeScheme{
+					{
+						Type: "paragraph",
+						Content: []*models.CommentNodeScheme{
+							{
+								Type: "text",
+								Text: description,
+							},
+						},
+					},
+				},
+			},
+			Labels: []string{"CI_Failure"},
 		},
 	}
 }
 
-func findMatchingIssue(search []jira.Issue, summary string) *jira.Issue {
+func findMatchingIssue(search []*models.IssueScheme, summary string) *models.IssueScheme {
 	for _, i := range search {
-		if i.Fields.Summary == summary {
-			return &i
+		if i.Fields != nil && i.Fields.Summary == summary {
+			return i
 		}
 	}
 	return nil
 }
 
-func logError(e error, response *jira.Response) {
+func logError(e error, response *models.ResponseScheme) {
 	if response == nil {
 		log.WithError(e).Error("no response")
 		return
 	}
 
-	all, err := io.ReadAll(response.Body)
-
-	if err != nil {
-		log.WithError(e).WithField("StatusCode", response.StatusCode).Errorf("Could not read body: %q", err)
+	if response.Bytes.String() != "" {
+		log.WithError(e).WithField("StatusCode", response.Code).Error("Server response: " + response.Bytes.String())
 	} else {
-		log.WithError(e).WithField("StatusCode", response.StatusCode).Error("Server response: "+string(all))
+		log.WithError(e).WithField("StatusCode", response.Code).Error("no response body")
 	}
 }
 
