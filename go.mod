@@ -1,6 +1,6 @@
 module github.com/stackrox/junit2jira
 
-go 1.24.0
+go 1.25
 
 require (
 	cloud.google.com/go/bigquery v1.73.1
@@ -11,7 +11,7 @@ require (
 	github.com/joshdk/go-junit v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.4
-	github.com/slack-go/slack v0.17.3
+	github.com/slack-go/slack v0.18.0
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )
