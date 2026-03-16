@@ -61,9 +61,17 @@ Usage of junit2jira:
     	print version information and exit
 ```
 
+*Authentication*
+
+For Jira Cloud authentication, you need to provide:
+- `JIRA_USER`: Your Jira account email address
+- `JIRA_TOKEN`: Your Jira API token (get it from https://id.atlassian.com/manage-profile/security/api-tokens)
+
 *Example usage*
 ```shell
-JIRA_TOKEN="..." junit2jira \
+JIRA_USER="user@example.com" \
+JIRA_TOKEN="..." \
+junit2jira \
   -jira-url "https://..." \
   -junit-reports-dir "..." \
   -base-link "https://..." \

@@ -105,7 +105,7 @@ func run(p params) error {
 	}
 
 	if jiraUser == "" || jiraToken == "" {
-		log.Fatal("JIRA_USER (email) and JIRA_TOKEN are required for Jira Cloud authentication")
+		log.Fatal("JIRA_USER (email) and JIRA_TOKEN are required for Jira Cloud authentication. Get your API token at https://id.atlassian.com/manage-profile/security/api-tokens")
 	}
 
 	jiraClient, err := jira.New(nil, p.jiraUrl.String())
