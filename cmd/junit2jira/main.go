@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/csv"
 	"encoding/json"
@@ -15,15 +16,14 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/andygrunwald/go-jira"
+	jira "github.com/ctreminiom/go-atlassian/v2/jira/v3"
+	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/hashicorp/go-multierror"
-	"github.com/hashicorp/go-retryablehttp"
 	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
-	"github.com/stackrox/junit2jira/pkg/logger"
 	"github.com/stackrox/junit2jira/pkg/testcase"
 )
 
@@ -91,24 +91,30 @@ type junit2jira struct {
 }
 
 type testIssue struct {
-	issue    *jira.Issue
+	issue    *models.IssueScheme
 	newJIRA  bool
 	testCase j2jTestCase
 }
 
 func run(p params) error {
-	retryClient := retryablehttp.NewClient()
-	retryClient.Logger = logger.NewLeveled()
-	transport := retryClient.StandardClient().Transport
-	tp := jira.PATAuthTransport{
-		Token:     os.Getenv("JIRA_TOKEN"),
-		Transport: transport,
+	// Check for username (email) for Basic Auth
+	jiraUser := os.Getenv("JIRA_USER")
+	jiraToken := os.Getenv("JIRA_TOKEN")
+	if jiraToken == "" {
+		jiraToken = os.Getenv("JIRA_PASSWORD") // backward compatibility
 	}
 
-	jiraClient, err := jira.NewClient(tp.Client(), p.jiraUrl.String())
+	if jiraUser == "" || jiraToken == "" {
+		log.Fatal("JIRA_USER (email) and JIRA_TOKEN are required for Jira Cloud authentication. Get your API token at https://id.atlassian.com/manage-profile/security/api-tokens")
+	}
+
+	jiraClient, err := jira.New(nil, p.jiraUrl.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not create client for %s", p.jiraUrl)
 	}
+
+	jiraClient.Auth.SetBasicAuth(jiraUser, jiraToken)
+	log.Info("Using Basic Auth (email + API token)")
 
 	j := &junit2jira{
 		params:     p,
@@ -140,7 +146,7 @@ func run(p params) error {
 		return errors.Wrap(err, "could not convert to slack")
 	}
 
-	jiraIssues := make([]*jira.Issue, 0, len(issues))
+	jiraIssues := make([]*models.IssueScheme, 0, len(issues))
 	for _, i := range issues {
 		jiraIssues = append(jiraIssues, i.issue)
 	}
@@ -212,7 +218,7 @@ func (j junit2jira) createSlackMessage(tc []*testIssue) error {
 	return nil
 }
 
-func (j junit2jira) createHtml(issues []*jira.Issue) error {
+func (j junit2jira) createHtml(issues []*models.IssueScheme) error {
 	if j.htmlOutput == "" || len(issues) == 0 {
 		return nil
 	}
@@ -229,11 +235,11 @@ func (j junit2jira) createHtml(issues []*jira.Issue) error {
 }
 
 type htmlData struct {
-	Issues  []*jira.Issue
+	Issues  []*models.IssueScheme
 	JiraUrl *url.URL
 }
 
-func (j junit2jira) renderHtml(issues []*jira.Issue, out io.Writer) error {
+func (j junit2jira) renderHtml(issues []*models.IssueScheme, out io.Writer) error {
 	t, err := template.New(j.htmlOutput).Parse(htmlOutputTemplate)
 	if err != nil {
 		return fmt.Errorf("could parse template: %w", err)
@@ -279,7 +285,7 @@ func (j junit2jira) createIssuesOrComments(failedTests []j2jTestCase) ([]*testIs
 	return issues, result
 }
 
-func (j junit2jira) linkIssues(issues []*jira.Issue) error {
+func (j junit2jira) linkIssues(issues []*models.IssueScheme) error {
 	const linkType = "Related" // link type may vay between jira versions and configurations
 
 	var result error
@@ -291,11 +297,19 @@ func (j junit2jira) linkIssues(issues []*jira.Issue) error {
 				continue
 			}
 
-			_, err := j.jiraClient.Issue.AddLink(&jira.IssueLink{
-				Type:         jira.IssueLinkType{Name: linkType},
-				OutwardIssue: &jira.Issue{Key: issue.Key},
-				InwardIssue:  &jira.Issue{Key: issues[y].Key},
-			})
+			payload := &models.LinkPayloadSchemeV3{
+				Type: &models.LinkTypeScheme{
+					Name: linkType,
+				},
+				InwardIssue: &models.LinkedIssueScheme{
+					Key: issues[y].Key,
+				},
+				OutwardIssue: &models.LinkedIssueScheme{
+					Key: issue.Key,
+				},
+			}
+
+			_, err := j.jiraClient.Issue.Link.Create(context.TODO(), payload)
 			if err != nil {
 				result = multierror.Append(result, err)
 				continue
@@ -317,13 +331,20 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	}
 	const NA = "?"
 	logEntry(NA, summary).Debug("Searching for issue")
-	search, response, err := j.jiraClient.Issue.Search(fmt.Sprintf(jql, j.jiraProject, summary), nil)
+	searchResult, response, err := j.jiraClient.Issue.Search.SearchJQL(
+		context.TODO(),
+		fmt.Sprintf(jql, j.jiraProject, summary),
+		[]string{"summary"}, // fields - request summary field
+		nil,                 // expand
+		50,                  // maxResults
+		"",                  // nextPageToken (empty for first page)
+	)
 	if err != nil {
 		logError(err, response)
 		return nil, fmt.Errorf("could not search: %w", err)
 	}
 
-	issue := findMatchingIssue(search, summary)
+	issue := findMatchingIssue(searchResult.Issues, summary)
 	issueWithTestCase := testIssue{
 		issue:    issue,
 		testCase: tc,
@@ -332,11 +353,11 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	if issue == nil {
 		logEntry(NA, summary).Info("Issue not found. Creating new issue...")
 		if j.dryRun {
-			logEntry(NA, summary).Debugf("Dry run: will just print issue\n %q", description)
+			logEntry(NA, summary).Debug("Dry run: would create new issue")
 			return nil, nil
 		}
 		issue = newIssue(j.jiraProject, summary, description)
-		create, response, err := j.jiraClient.Issue.Create(issue)
+		create, response, err := j.jiraClient.Issue.Create(context.TODO(), issue, nil)
 		if err != nil {
 			logError(err, response)
 			return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
@@ -351,18 +372,19 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		return &issueWithTestCase, nil
 	}
 
-	comment := jira.Comment{
+	// Use the same ADF description for the comment
+	comment := &models.CommentPayloadScheme{
 		Body: description,
 	}
 
 	logEntry(issue.Key, issue.Fields.Summary).Info("Found issue. Creating a comment...")
 
 	if j.dryRun {
-		logEntry(NA, issue.Fields.Summary).Debugf("Dry run: will just print comment:\n%q", description)
+		logEntry(NA, issue.Fields.Summary).Debug("Dry run: would add comment to existing issue")
 		return &issueWithTestCase, nil
 	}
 
-	addComment, response, err := j.jiraClient.Issue.AddComment(issue.ID, &comment)
+	addComment, response, err := j.jiraClient.Issue.Comment.Add(context.TODO(), issue.Key, comment, nil)
 	if err != nil {
 		logError(err, response)
 		return nil, fmt.Errorf("could not comment on issue %s: %w", summary, err)
@@ -419,13 +441,13 @@ func logEntry(id, summary string) *log.Entry {
 	return log.WithField("ID", id).WithField("summary", summary)
 }
 
-func newIssue(project string, summary string, description string) *jira.Issue {
-	return &jira.Issue{
-		Fields: &jira.IssueFields{
-			Type: jira.IssueType{
+func newIssue(project string, summary string, description *models.CommentNodeScheme) *models.IssueScheme {
+	return &models.IssueScheme{
+		Fields: &models.IssueFieldsScheme{
+			IssueType: &models.IssueTypeScheme{
 				Name: "Bug",
 			},
-			Project: jira.Project{
+			Project: &models.ProjectScheme{
 				Key: project,
 			},
 			Summary:     summary,
@@ -435,27 +457,25 @@ func newIssue(project string, summary string, description string) *jira.Issue {
 	}
 }
 
-func findMatchingIssue(search []jira.Issue, summary string) *jira.Issue {
+func findMatchingIssue(search []*models.IssueScheme, summary string) *models.IssueScheme {
 	for _, i := range search {
-		if i.Fields.Summary == summary {
-			return &i
+		if i.Fields != nil && i.Fields.Summary == summary {
+			return i
 		}
 	}
 	return nil
 }
 
-func logError(e error, response *jira.Response) {
+func logError(e error, response *models.ResponseScheme) {
 	if response == nil {
 		log.WithError(e).Error("no response")
 		return
 	}
 
-	all, err := io.ReadAll(response.Body)
-
-	if err != nil {
-		log.WithError(e).WithField("StatusCode", response.StatusCode).Errorf("Could not read body: %q", err)
+	if response.Bytes.String() != "" {
+		log.WithError(e).WithField("StatusCode", response.Code).Error("Server response: " + response.Bytes.String())
 	} else {
-		log.WithError(e).WithField("StatusCode", response.StatusCode).Error("Server response: "+string(all))
+		log.WithError(e).WithField("StatusCode", response.Code).Error("no response body")
 	}
 }
 
@@ -540,34 +560,6 @@ func (j junit2jira) mergeFailedTests(failedTests []j2jTestCase) ([]j2jTestCase, 
 }
 
 const (
-	desc = `
-{{- if .Message }}
-{code:title=Message|borderStyle=solid}
-{{ .Message | truncate }}
-{code}
-{{- end }}
-{{- if .Stderr }}
-{code:title=STDERR|borderStyle=solid}
-{{ .Stderr | truncate }}
-{code}
-{{- end }}
-{{- if .Stdout }}
-{code:title=STDOUT|borderStyle=solid}
-{{ .Stdout | truncate }}
-{code}
-{{- end }}
-{{- if .Error }}
-{code:title=ERROR|borderStyle=solid}
-{{ .Error | truncate }}
-{code}
-{{- end }}
-
-||    ENV     ||      Value           ||
-| BUILD ID     | [{{- .BuildId -}}|{{- .BuildLink -}}]|
-| BUILD TAG    | [{{- .BuildTag -}}|{{- .BaseLink -}}]|
-| JOB NAME     | {{- .JobName -}}      |
-| ORCHESTRATOR | {{- .Orchestrator -}} |
-`
 	summaryTpl = `{{ (print .Suite " / " .Name) | truncateSummary }} FAILED`
 )
 
@@ -625,8 +617,280 @@ func newJ2jTestCase(testCase testcase.TestCase, p params) j2jTestCase {
 	}
 }
 
-func (tc *j2jTestCase) description() (string, error) {
-	return render(*tc, desc)
+func (tc *j2jTestCase) description() (*models.CommentNodeScheme, error) {
+	return tc.buildADFDescription(), nil
+}
+
+// buildADFDescription creates an Atlassian Document Format structure for the issue description
+func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
+	content := []*models.CommentNodeScheme{}
+
+	// Add Message section if present
+	if tc.Message != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "Message"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Message)},
+			},
+		})
+	}
+
+	if tc.Stderr != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "STDERR"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Stderr)},
+			},
+		})
+	}
+
+	if tc.Stdout != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "STDOUT"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Stdout)},
+			},
+		})
+	}
+
+	if tc.Error != "" {
+		content = append(content, &models.CommentNodeScheme{
+			Type: "heading",
+			Attrs: map[string]interface{}{
+				"level": 3,
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: "ERROR"},
+			},
+		})
+		content = append(content, &models.CommentNodeScheme{
+			Type: "codeBlock",
+			Attrs: map[string]interface{}{
+				"language": "text",
+			},
+			Content: []*models.CommentNodeScheme{
+				{Type: "text", Text: truncate(tc.Error)},
+			},
+		})
+	}
+
+	// Add Build Information table
+	content = append(content, &models.CommentNodeScheme{
+		Type: "heading",
+		Attrs: map[string]interface{}{
+			"level": 3,
+		},
+		Content: []*models.CommentNodeScheme{
+			{Type: "text", Text: "Build Information"},
+		},
+	})
+
+	// Create table for build info
+	tableRows := []*models.CommentNodeScheme{
+		// Header row
+		{
+			Type: "tableRow",
+			Content: []*models.CommentNodeScheme{
+				{
+					Type: "tableHeader",
+					Content: []*models.CommentNodeScheme{
+						{Type: "paragraph", Content: []*models.CommentNodeScheme{
+							{Type: "text", Text: "ENV", Marks: []*models.MarkScheme{{Type: "strong"}}},
+						}},
+					},
+				},
+				{
+					Type: "tableHeader",
+					Content: []*models.CommentNodeScheme{
+						{Type: "paragraph", Content: []*models.CommentNodeScheme{
+							{Type: "text", Text: "Value", Marks: []*models.MarkScheme{{Type: "strong"}}},
+						}},
+					},
+				},
+			},
+		},
+	}
+
+	// Build ID row with link
+	buildIDContent := []*models.CommentNodeScheme{}
+	if tc.BuildLink != "" {
+		buildIDContent = append(buildIDContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: tc.BuildId,
+			Marks: []*models.MarkScheme{{
+				Type: "link",
+				Attrs: map[string]interface{}{
+					"href": tc.BuildLink,
+				},
+			}},
+		})
+	} else {
+		buildIDContent = append(buildIDContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: tc.BuildId,
+		})
+	}
+
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "BUILD ID"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: buildIDContent},
+				},
+			},
+		},
+	})
+
+	// Build TAG row with link
+	buildTagContent := []*models.CommentNodeScheme{}
+	buildTagText := tc.BuildTag
+	if buildTagText == "" {
+		buildTagText = " " // Use space for empty values to ensure text field is present, required by the API
+	}
+	if tc.BaseLink != "" && tc.BuildTag != "" {
+		buildTagContent = append(buildTagContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: buildTagText,
+			Marks: []*models.MarkScheme{{
+				Type: "link",
+				Attrs: map[string]interface{}{
+					"href": tc.BaseLink,
+				},
+			}},
+		})
+	} else {
+		buildTagContent = append(buildTagContent, &models.CommentNodeScheme{
+			Type: "text",
+			Text: buildTagText,
+		})
+	}
+
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "BUILD TAG"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: buildTagContent},
+				},
+			},
+		},
+	})
+
+	// Job Name row
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "JOB NAME"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: tc.JobName},
+					}},
+				},
+			},
+		},
+	})
+
+	// Orchestrator row
+	orchestratorText := tc.Orchestrator
+	if orchestratorText == "" {
+		orchestratorText = " " // Use space for empty values to ensure text field is present, required by the API
+	}
+	tableRows = append(tableRows, &models.CommentNodeScheme{
+		Type: "tableRow",
+		Content: []*models.CommentNodeScheme{
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: "ORCHESTRATOR"},
+					}},
+				},
+			},
+			{
+				Type: "tableCell",
+				Content: []*models.CommentNodeScheme{
+					{Type: "paragraph", Content: []*models.CommentNodeScheme{
+						{Type: "text", Text: orchestratorText},
+					}},
+				},
+			},
+		},
+	})
+
+	content = append(content, &models.CommentNodeScheme{
+		Type:    "table",
+		Content: tableRows,
+	})
+
+	return &models.CommentNodeScheme{
+		Version: 1,
+		Type:    "doc",
+		Content: content,
+	}
 }
 
 func (tc j2jTestCase) summary() (string, error) {

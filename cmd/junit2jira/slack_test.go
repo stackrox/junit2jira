@@ -4,10 +4,11 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"github.com/andygrunwald/go-jira"
+	"testing"
+
+	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 	"github.com/joshdk/go-junit"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 var (
@@ -50,7 +51,7 @@ func TestConstructSlackMessage(t *testing.T) {
 					testCase: s,
 				})
 			}
-			issues[0].issue = &jira.Issue{
+			issues[0].issue = &models.IssueScheme{
 				Self: "some/url/foo-1",
 				Key:  "FOO-1",
 			}

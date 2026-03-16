@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/andygrunwald/go-jira"
+	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 	"github.com/stackrox/junit2jira/pkg/testcase"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -260,29 +260,35 @@ func TestDescription(t *testing.T) {
 	}
 	actual, err := tc.description()
 	assert.NoError(t, err)
-	assert.Equal(t, `
-{code:title=Message|borderStyle=solid}
-Condition not satisfied:
 
-waitForViolation(deploymentName,  policyName, 60)
-|                |                |
-false            qadefpolstruts   Apache Struts: CVE-2017-5638
+	// Verify ADF structure
+	assert.NotNil(t, actual)
+	assert.Equal(t, 1, actual.Version)
+	assert.Equal(t, "doc", actual.Type)
+	assert.NotEmpty(t, actual.Content)
 
-{code}
-{code:title=STDOUT|borderStyle=solid}
-?[1;30m21:35:15?[0;39m | ?[34mINFO ?[0;39m | DefaultPoliciesTest       | Starting testcase
-?[1;30m21:36:16?[0;39m | ?[34mINFO ?[0;39m | Services                  | Failed to trigger Apache Struts: CVE-2017-5638 after waiting 60 seconds
-?[1;30m21:36:16?[0;39m | ?[1;31mERROR?[0;39m | Helpers                   | An exception occurred in test
-org.spockframework.runtime.ConditionNotSatisfiedError: Condition not satisfied:
+	// Should have Message section (heading + codeBlock) and STDOUT section (heading + codeBlock) and Build Information (heading + table)
+	// Total: 6 elements (2 for Message, 2 for STDOUT, 2 for Build Info)
+	assert.Equal(t, 6, len(actual.Content))
 
-{code}
+	assert.Equal(t, "heading", actual.Content[0].Type)
+	assert.Equal(t, "Message", actual.Content[0].Content[0].Text)
 
-||    ENV     ||      Value           ||
-| BUILD ID     | [1|https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/1]|
-| BUILD TAG    | [|]|
-| JOB NAME     ||
-| ORCHESTRATOR ||
-`, actual)
+	assert.Equal(t, "codeBlock", actual.Content[1].Type)
+	assert.Contains(t, actual.Content[1].Content[0].Text, "Condition not satisfied")
+
+	assert.Equal(t, "heading", actual.Content[2].Type)
+	assert.Equal(t, "STDOUT", actual.Content[2].Content[0].Text)
+
+	assert.Equal(t, "codeBlock", actual.Content[3].Type)
+	assert.Contains(t, actual.Content[3].Content[0].Text, "DefaultPoliciesTest")
+
+	assert.Equal(t, "heading", actual.Content[4].Type)
+	assert.Equal(t, "Build Information", actual.Content[4].Content[0].Text)
+
+	assert.Equal(t, "table", actual.Content[5].Type)
+	assert.NotEmpty(t, actual.Content[5].Content) // Should have rows
+
 	s, err := tc.summary()
 	assert.NoError(t, err)
 	assert.Equal(t, `DefaultPoliciesTest / Verify policy Apache Struts  CVE-2017-5638 is triggered FAILED`, s)
@@ -295,26 +301,11 @@ org.spockframework.runtime.ConditionNotSatisfiedError: Condition not satisfied:
 	maxTextBlockLength = 100
 	actual, err = tc.description()
 	assert.NoError(t, err)
-	assert.Equal(t, `
-{code:title=Message|borderStyle=solid}
-Condition not satisfied:
 
-waitForViolation(deploymentName,  policyName, 60)
-|                |      
- … too long, truncated.
-{code}
-{code:title=STDOUT|borderStyle=solid}
-?[1;30m21:35:15?[0;39m | ?[34mINFO ?[0;39m | DefaultPoliciesTest       | Starting testcase
-?[1;30m21
- … too long, truncated.
-{code}
-
-||    ENV     ||      Value           ||
-| BUILD ID     | [1|https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/1]|
-| BUILD TAG    | [|]|
-| JOB NAME     ||
-| ORCHESTRATOR ||
-`, actual)
+	// Verify truncation works with ADF
+	assert.NotNil(t, actual)
+	assert.Equal(t, "codeBlock", actual.Content[1].Type)
+	assert.Contains(t, actual.Content[1].Content[0].Text, "… too long, truncated")
 }
 
 func TestCsvOutput(t *testing.T) {
@@ -423,9 +414,9 @@ func TestHtmlOutput(t *testing.T) {
 	buf := bytes.NewBufferString("")
 	require.NoError(t, j.renderHtml(nil, buf))
 
-	issues := []*jira.Issue{
-		{Key: "ROX-1", Fields: &jira.IssueFields{Summary: "abc"}},
-		{Key: "ROX-2", Fields: &jira.IssueFields{Summary: "def"}},
+	issues := []*models.IssueScheme{
+		{Key: "ROX-1", Fields: &models.IssueFieldsScheme{Summary: "abc"}},
+		{Key: "ROX-2", Fields: &models.IssueFieldsScheme{Summary: "def"}},
 		{Key: "ROX-3"},
 	}
 	buf = bytes.NewBufferString("")
@@ -445,17 +436,17 @@ func TestSummaryNoFailures(t *testing.T) {
 	expectedSummarySomeNewJIRAs := `{"newJIRAs":2}`
 	tc := []*testIssue{
 		{
-			issue:    &jira.Issue{Key: "ROX-1"},
+			issue:    &models.IssueScheme{Key: "ROX-1"},
 			newJIRA:  false,
 			testCase: j2jTestCase{},
 		},
 		{
-			issue:    &jira.Issue{Key: "ROX-2"},
+			issue:    &models.IssueScheme{Key: "ROX-2"},
 			newJIRA:  true,
 			testCase: j2jTestCase{},
 		},
 		{
-			issue:    &jira.Issue{Key: "ROX-3"},
+			issue:    &models.IssueScheme{Key: "ROX-3"},
 			newJIRA:  true,
 			testCase: j2jTestCase{},
 		},
