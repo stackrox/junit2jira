@@ -271,27 +271,21 @@ func TestDescription(t *testing.T) {
 	// Total: 6 elements (2 for Message, 2 for STDOUT, 2 for Build Info)
 	assert.Equal(t, 6, len(actual.Content))
 
-	// Check Message heading
 	assert.Equal(t, "heading", actual.Content[0].Type)
 	assert.Equal(t, "Message", actual.Content[0].Content[0].Text)
 
-	// Check Message codeBlock
 	assert.Equal(t, "codeBlock", actual.Content[1].Type)
 	assert.Contains(t, actual.Content[1].Content[0].Text, "Condition not satisfied")
 
-	// Check STDOUT heading
 	assert.Equal(t, "heading", actual.Content[2].Type)
 	assert.Equal(t, "STDOUT", actual.Content[2].Content[0].Text)
 
-	// Check STDOUT codeBlock
 	assert.Equal(t, "codeBlock", actual.Content[3].Type)
 	assert.Contains(t, actual.Content[3].Content[0].Text, "DefaultPoliciesTest")
 
-	// Check Build Information heading
 	assert.Equal(t, "heading", actual.Content[4].Type)
 	assert.Equal(t, "Build Information", actual.Content[4].Content[0].Text)
 
-	// Check Build Information table
 	assert.Equal(t, "table", actual.Content[5].Type)
 	assert.NotEmpty(t, actual.Content[5].Content) // Should have rows
 

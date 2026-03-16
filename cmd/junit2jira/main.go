@@ -108,13 +108,11 @@ func run(p params) error {
 		log.Fatal("JIRA_USER (email) and JIRA_TOKEN are required for Jira Cloud authentication")
 	}
 
-	// Create Jira client using go-atlassian library
 	jiraClient, err := jira.New(nil, p.jiraUrl.String())
 	if err != nil {
 		return errors.Wrapf(err, "could not create client for %s", p.jiraUrl)
 	}
 
-	// Set Basic Auth with email and API token
 	jiraClient.Auth.SetBasicAuth(jiraUser, jiraToken)
 	log.Info("Using Basic Auth (email + API token)")
 
@@ -649,7 +647,6 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		})
 	}
 
-	// Add STDERR section if present
 	if tc.Stderr != "" {
 		content = append(content, &models.CommentNodeScheme{
 			Type: "heading",
@@ -671,7 +668,6 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		})
 	}
 
-	// Add STDOUT section if present
 	if tc.Stdout != "" {
 		content = append(content, &models.CommentNodeScheme{
 			Type: "heading",
@@ -693,7 +689,6 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		})
 	}
 
-	// Add ERROR section if present
 	if tc.Error != "" {
 		content = append(content, &models.CommentNodeScheme{
 			Type: "heading",
@@ -796,7 +791,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	buildTagContent := []*models.CommentNodeScheme{}
 	buildTagText := tc.BuildTag
 	if buildTagText == "" {
-		buildTagText = " " // Use space for empty values to ensure text field is present
+		buildTagText = " " // Use space for empty values to ensure text field is present, required by the API
 	}
 	if tc.BaseLink != "" && tc.BuildTag != "" {
 		buildTagContent = append(buildTagContent, &models.CommentNodeScheme{
@@ -862,7 +857,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	// Orchestrator row
 	orchestratorText := tc.Orchestrator
 	if orchestratorText == "" {
-		orchestratorText = " " // Use space for empty values to ensure text field is present
+		orchestratorText = " " // Use space for empty values to ensure text field is present, required by the API
 	}
 	tableRows = append(tableRows, &models.CommentNodeScheme{
 		Type: "tableRow",
@@ -886,7 +881,6 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		},
 	})
 
-	// Add the table to content
 	content = append(content, &models.CommentNodeScheme{
 		Type:    "table",
 		Content: tableRows,
