@@ -13,8 +13,8 @@ func NewLeveled() retryablehttp.LeveledLogger {
 	return leveled{l: log.StandardLogger()}
 }
 
-func (l leveled) withFields(keysAndValues []interface{}) *log.Entry {
-	f := make(map[string]interface{})
+func (l leveled) withFields(keysAndValues []any) *log.Entry {
+	f := make(map[string]any)
 
 	for i := 0; i < len(keysAndValues)-1; i += 2 {
 		f[keysAndValues[i].(string)] = keysAndValues[i+1]
@@ -23,17 +23,17 @@ func (l leveled) withFields(keysAndValues []interface{}) *log.Entry {
 	return l.l.WithFields(f)
 }
 
-func (l leveled) Error(msg string, keysAndValues ...interface{}) {
+func (l leveled) Error(msg string, keysAndValues ...any) {
 	l.withFields(keysAndValues).Error(msg)
 }
 
-func (l leveled) Info(msg string, keysAndValues ...interface{}) {
+func (l leveled) Info(msg string, keysAndValues ...any) {
 	l.withFields(keysAndValues).Info(msg)
 }
-func (l leveled) Debug(msg string, keysAndValues ...interface{}) {
+func (l leveled) Debug(msg string, keysAndValues ...any) {
 	l.withFields(keysAndValues).Debug(msg)
 }
 
-func (l leveled) Warn(msg string, keysAndValues ...interface{}) {
+func (l leveled) Warn(msg string, keysAndValues ...any) {
 	l.withFields(keysAndValues).Warn(msg)
 }
