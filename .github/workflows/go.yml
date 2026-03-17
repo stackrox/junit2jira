@@ -25,7 +25,7 @@ jobs:
       run: CGO_ENABLED=0 go build -a -tags netgo -ldflags '-s -w' -v -o . ./...
 
     - name: Compress binaries
-      uses: svenstaro/upx-action@v2
+      uses: svenstaro/upx-action@v3
       with:
         files: |
           junit2jira
