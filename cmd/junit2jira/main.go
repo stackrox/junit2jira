@@ -16,9 +16,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/carlmjohnson/versioninfo"
 	jira "github.com/ctreminiom/go-atlassian/v2/jira/v3"
 	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
-	"github.com/carlmjohnson/versioninfo"
 	"github.com/hashicorp/go-multierror"
 	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
@@ -514,9 +514,9 @@ func (j junit2jira) findMostRecentClosedIssue(summary string) (*models.IssueSche
 		context.Background(),
 		jqlQuery,
 		[]string{"summary", "updated"}, // fields
-		nil,                             // expand
-		1,                               // maxResults: only need the most recent
-		"",                              // nextPageToken
+		nil,                            // expand
+		1,                              // maxResults: only need the most recent
+		"",                             // nextPageToken
 	)
 
 	if err != nil {
@@ -816,10 +816,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 
 	// Build ID row with link
 	buildIDContent := []*models.CommentNodeScheme{}
-	buildIDText := tc.BuildId
-	if buildIDText == "" {
-		buildIDText = " " // Use space for empty values to ensure text field is present, required by the API
-	}
+	buildIDText := spaceIfEmpty(tc.BuildId)
 	if tc.BuildLink != "" {
 		buildIDContent = append(buildIDContent, &models.CommentNodeScheme{
 			Type: "text",
@@ -903,10 +900,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	})
 
 	// Job Name row
-	jobNameText := tc.JobName
-	if jobNameText == "" {
-		jobNameText = " " // Use space for empty values to ensure text field is present, required by the API
-	}
+	jobNameText := spaceIfEmpty(tc.JobName)
 	tableRows = append(tableRows, &models.CommentNodeScheme{
 		Type: "tableRow",
 		Content: []*models.CommentNodeScheme{
@@ -930,10 +924,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	})
 
 	// Orchestrator row
-	orchestratorText := tc.Orchestrator
-	if orchestratorText == "" {
-		orchestratorText = " " // Use space for empty values to ensure text field is present, required by the API
-	}
+	orchestratorText := spaceIfEmpty(tc.Orchestrator)
 	tableRows = append(tableRows, &models.CommentNodeScheme{
 		Type: "tableRow",
 		Content: []*models.CommentNodeScheme{
@@ -968,6 +959,14 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	}
 }
 
+// spaceIfEmpty: Use space for empty values to ensure text field is present, required by the API
+func spaceIfEmpty(str string) string {
+	if str == "" {
+		return " "
+	}
+	return str
+}
+
 func (tc j2jTestCase) summary() (string, error) {
 	s, err := render(tc, summaryTpl)
 	if err != nil {
@@ -977,7 +976,7 @@ func (tc j2jTestCase) summary() (string, error) {
 }
 
 func render(tc j2jTestCase, text string) (string, error) {
-	tmpl, err := template.New("test").Funcs(map[string]interface{}{"truncate": truncate, "truncateSummary": truncateSummary}).Parse(text)
+	tmpl, err := template.New("test").Funcs(map[string]any{"truncate": truncate, "truncateSummary": truncateSummary}).Parse(text)
 	if err != nil {
 		return "", err
 	}
