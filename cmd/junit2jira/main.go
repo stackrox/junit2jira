@@ -16,9 +16,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/carlmjohnson/versioninfo"
 	jira "github.com/ctreminiom/go-atlassian/v2/jira/v3"
 	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
-	"github.com/carlmjohnson/versioninfo"
 	"github.com/hashicorp/go-multierror"
 	"github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
@@ -34,6 +34,13 @@ AND status != Closed
 AND labels = CI_Failure
 AND summary ~ %q
 ORDER BY created DESC`
+	jqlClosedTicketsQuery = `project in (%s)
+AND issuetype = Bug
+AND status = Closed
+AND labels = CI_Failure
+AND summary ~ %q
+ORDER BY updated DESC`
+	linkType = "Related" // link type may vary between jira versions and configurations
 	// Slack has a 150-character limit for text header
 	slackHeaderTextLengthLimit = 150
 	// Slack has a 3000-character limit for (non-field) text objects
@@ -286,8 +293,6 @@ func (j junit2jira) createIssuesOrComments(failedTests []j2jTestCase) ([]*testIs
 }
 
 func (j junit2jira) linkIssues(issues []*models.IssueScheme) error {
-	const linkType = "Related" // link type may vay between jira versions and configurations
-
 	var result error
 	for x, issue := range issues {
 		for y := 0; y < x; y++ {
@@ -318,6 +323,24 @@ func (j junit2jira) linkIssues(issues []*models.IssueScheme) error {
 		}
 	}
 	return result
+}
+
+func (j junit2jira) linkToClosedTicket(newIssue, closedIssue *models.IssueScheme) error {
+	payload := &models.LinkPayloadSchemeV3{
+		Type:         &models.LinkTypeScheme{Name: linkType},
+		InwardIssue:  &models.LinkedIssueScheme{Key: newIssue.Key},
+		OutwardIssue: &models.LinkedIssueScheme{Key: closedIssue.Key},
+	}
+
+	response, err := j.jiraClient.Issue.Link.Create(context.Background(), payload)
+	if err != nil {
+		if response != nil {
+			return fmt.Errorf("create link (HTTP %d): %w", response.Code, err)
+		}
+		return fmt.Errorf("create link: %w", err)
+	}
+
+	return nil
 }
 
 func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
@@ -369,6 +392,24 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		logEntry(issue.Key, summary).Info("Created new issue")
 		issueWithTestCase.issue = issue
 		issueWithTestCase.newJIRA = true
+
+		closedIssue, err := j.findMostRecentClosedIssue(summary)
+		if err != nil {
+			logEntry(issue.Key, summary).WithError(err).Warn("Failed to search for closed tickets")
+		} else if closedIssue != nil {
+			logEntry(issue.Key, summary).Infof("Found closed ticket %s, creating link...", closedIssue.Key)
+			if !j.dryRun {
+				err = j.linkToClosedTicket(issue, closedIssue)
+				if err != nil {
+					logEntry(issue.Key, summary).WithError(err).Warn("Failed to link to closed ticket")
+				} else {
+					logEntry(issue.Key, summary).Infof("Linked to closed ticket %s", closedIssue.Key)
+				}
+			} else {
+				logEntry(issue.Key, summary).Debugf("Dry run: would link to closed ticket %s", closedIssue.Key)
+			}
+		}
+
 		return &issueWithTestCase, nil
 	}
 
@@ -464,6 +505,32 @@ func findMatchingIssue(search []*models.IssueScheme, summary string) *models.Iss
 		}
 	}
 	return nil
+}
+
+func (j junit2jira) findMostRecentClosedIssue(summary string) (*models.IssueScheme, error) {
+	jqlQuery := fmt.Sprintf(jqlClosedTicketsQuery, j.jiraProject, summary)
+
+	search, response, err := j.jiraClient.Issue.Search.SearchJQL(
+		context.Background(),
+		jqlQuery,
+		[]string{"summary", "updated"}, // fields
+		nil,                            // expand
+		1,                              // maxResults: only need the most recent
+		"",                             // nextPageToken
+	)
+
+	if err != nil {
+		if response != nil {
+			return nil, fmt.Errorf("search closed tickets (HTTP %d): %w", response.Code, err)
+		}
+		return nil, fmt.Errorf("search closed tickets: %w", err)
+	}
+
+	if search == nil || len(search.Issues) == 0 {
+		return nil, nil
+	}
+
+	return findMatchingIssue(search.Issues, summary), nil
 }
 
 func logError(e error, response *models.ResponseScheme) {
@@ -749,10 +816,11 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 
 	// Build ID row with link
 	buildIDContent := []*models.CommentNodeScheme{}
+	buildIDText := spaceIfEmpty(tc.BuildId)
 	if tc.BuildLink != "" {
 		buildIDContent = append(buildIDContent, &models.CommentNodeScheme{
 			Type: "text",
-			Text: tc.BuildId,
+			Text: buildIDText,
 			Marks: []*models.MarkScheme{{
 				Type: "link",
 				Attrs: map[string]interface{}{
@@ -763,7 +831,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	} else {
 		buildIDContent = append(buildIDContent, &models.CommentNodeScheme{
 			Type: "text",
-			Text: tc.BuildId,
+			Text: buildIDText,
 		})
 	}
 
@@ -832,6 +900,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	})
 
 	// Job Name row
+	jobNameText := spaceIfEmpty(tc.JobName)
 	tableRows = append(tableRows, &models.CommentNodeScheme{
 		Type: "tableRow",
 		Content: []*models.CommentNodeScheme{
@@ -847,7 +916,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 				Type: "tableCell",
 				Content: []*models.CommentNodeScheme{
 					{Type: "paragraph", Content: []*models.CommentNodeScheme{
-						{Type: "text", Text: tc.JobName},
+						{Type: "text", Text: jobNameText},
 					}},
 				},
 			},
@@ -855,10 +924,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	})
 
 	// Orchestrator row
-	orchestratorText := tc.Orchestrator
-	if orchestratorText == "" {
-		orchestratorText = " " // Use space for empty values to ensure text field is present, required by the API
-	}
+	orchestratorText := spaceIfEmpty(tc.Orchestrator)
 	tableRows = append(tableRows, &models.CommentNodeScheme{
 		Type: "tableRow",
 		Content: []*models.CommentNodeScheme{
@@ -891,6 +957,14 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		Type:    "doc",
 		Content: content,
 	}
+}
+
+// spaceIfEmpty: Use space for empty values to ensure text field is present, required by the API
+func spaceIfEmpty(str string) string {
+	if str == "" {
+		return " "
+	}
+	return str
 }
 
 func (tc j2jTestCase) summary() (string, error) {
