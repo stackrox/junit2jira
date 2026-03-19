@@ -295,7 +295,7 @@ func (j junit2jira) createIssuesOrComments(failedTests []j2jTestCase) ([]*testIs
 func (j junit2jira) linkIssues(issues []*models.IssueScheme) error {
 	var result error
 	for x, issue := range issues {
-		for y := 0; y < x; y++ {
+		for y := range x {
 			// Skip cases where we have the same inward and outward issue.
 			// Jira does not allow linking a ticket to itself.
 			if issue.Key == issues[y].Key {
@@ -602,7 +602,7 @@ func testSuiteToCSV(ts junit.Suite, p params, w *csv.Writer) error {
 
 func (j junit2jira) mergeFailedTests(failedTests []j2jTestCase) ([]j2jTestCase, error) {
 	log.Warning("Too many failed tests, reporting them as a one failure.")
-	msg := ""
+	var msg strings.Builder
 	suite := failedTests[0].Suite
 	for _, t := range failedTests {
 		summary, err := t.summary()
@@ -613,13 +613,13 @@ func (j junit2jira) mergeFailedTests(failedTests []j2jTestCase) ([]j2jTestCase, 
 		if suite != t.Suite {
 			suite = j.JobName
 		}
-		msg += summary + "\n"
+		msg.WriteString(summary + "\n")
 	}
 
 	tc := newJ2jTestCase(
 		testcase.NewTestCase(
 			junit.Test{
-				Message:   msg,
+				Message:   msg.String(),
 				Classname: suite,
 			}), j.params)
 
@@ -696,7 +696,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	if tc.Message != "" {
 		content = append(content, &models.CommentNodeScheme{
 			Type: "heading",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"level": 3,
 			},
 			Content: []*models.CommentNodeScheme{
@@ -705,7 +705,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		})
 		content = append(content, &models.CommentNodeScheme{
 			Type: "codeBlock",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"language": "text",
 			},
 			Content: []*models.CommentNodeScheme{
@@ -717,7 +717,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	if tc.Stderr != "" {
 		content = append(content, &models.CommentNodeScheme{
 			Type: "heading",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"level": 3,
 			},
 			Content: []*models.CommentNodeScheme{
@@ -726,7 +726,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		})
 		content = append(content, &models.CommentNodeScheme{
 			Type: "codeBlock",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"language": "text",
 			},
 			Content: []*models.CommentNodeScheme{
@@ -738,7 +738,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	if tc.Stdout != "" {
 		content = append(content, &models.CommentNodeScheme{
 			Type: "heading",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"level": 3,
 			},
 			Content: []*models.CommentNodeScheme{
@@ -747,7 +747,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		})
 		content = append(content, &models.CommentNodeScheme{
 			Type: "codeBlock",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"language": "text",
 			},
 			Content: []*models.CommentNodeScheme{
@@ -759,7 +759,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	if tc.Error != "" {
 		content = append(content, &models.CommentNodeScheme{
 			Type: "heading",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"level": 3,
 			},
 			Content: []*models.CommentNodeScheme{
@@ -768,7 +768,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 		})
 		content = append(content, &models.CommentNodeScheme{
 			Type: "codeBlock",
-			Attrs: map[string]interface{}{
+			Attrs: map[string]any{
 				"language": "text",
 			},
 			Content: []*models.CommentNodeScheme{
@@ -780,7 +780,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 	// Add Build Information table
 	content = append(content, &models.CommentNodeScheme{
 		Type: "heading",
-		Attrs: map[string]interface{}{
+		Attrs: map[string]any{
 			"level": 3,
 		},
 		Content: []*models.CommentNodeScheme{
@@ -823,7 +823,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 			Text: buildIDText,
 			Marks: []*models.MarkScheme{{
 				Type: "link",
-				Attrs: map[string]interface{}{
+				Attrs: map[string]any{
 					"href": tc.BuildLink,
 				},
 			}},
@@ -867,7 +867,7 @@ func (tc *j2jTestCase) buildADFDescription() *models.CommentNodeScheme {
 			Text: buildTagText,
 			Marks: []*models.MarkScheme{{
 				Type: "link",
-				Attrs: map[string]interface{}{
+				Attrs: map[string]any{
 					"href": tc.BaseLink,
 				},
 			}},

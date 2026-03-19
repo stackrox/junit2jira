@@ -1,6 +1,6 @@
 module github.com/stackrox/junit2jira
 
-go 1.24.0
+go 1.26.0
 
 require (
 	cloud.google.com/go/bigquery v1.73.1
