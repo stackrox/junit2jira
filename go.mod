@@ -11,7 +11,7 @@ require (
 	github.com/joshdk/go-junit v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.4
-	github.com/slack-go/slack v0.21.0
+	github.com/slack-go/slack v0.21.1
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )
