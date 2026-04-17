@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	cloud.google.com/go/bigquery v1.76.0
 	github.com/carlmjohnson/versioninfo v0.22.5
-	github.com/ctreminiom/go-atlassian/v2 v2.11.0
+	github.com/ctreminiom/go-atlassian/v2 v2.11.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/joshdk/go-junit v1.0.0
