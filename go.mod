@@ -3,7 +3,7 @@ module github.com/stackrox/junit2jira
 go 1.26.0
 
 require (
-	cloud.google.com/go/bigquery v1.76.0
+	cloud.google.com/go/bigquery v1.77.0
 	github.com/carlmjohnson/versioninfo v0.22.5
 	github.com/ctreminiom/go-atlassian/v2 v2.12.0
 	github.com/hashicorp/go-multierror v1.1.1
