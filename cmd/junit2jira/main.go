@@ -28,13 +28,13 @@ import (
 )
 
 const (
-	jql = `project in (%s)
+	jql = `project = %s
 AND issuetype = Bug
 AND status != Closed
 AND labels = CI_Failure
 AND summary ~ %q
 ORDER BY created DESC`
-	jqlClosedTicketsQuery = `project in (%s)
+	jqlClosedTicketsQuery = `project = %s
 AND issuetype = Bug
 AND status = Closed
 AND labels = CI_Failure
@@ -67,6 +67,8 @@ func main() {
 	flag.StringVar(&p.BuildTag, "build-tag", "", "Built tag or revision.")
 	flag.StringVar(&p.JobName, "job-name", "", "Name of CI job.")
 	flag.StringVar(&p.Orchestrator, "orchestrator", "", "Orchestrator name (such as GKE or OpenShift), if any.")
+	flag.BoolVar(&p.enableAutoPriority, "enable-auto-priority", false, "Enable automatic priority escalation based on comment count.")
+	flag.StringVar(&p.priorityThresholds, "priority-thresholds", "4,16,64,128,256", "Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical).")
 	flag.BoolVar(&debug, "debug", false, "Enable debug log level")
 	versioninfo.AddFlag(flag.CommandLine)
 	flag.Parse()
@@ -431,6 +433,12 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		return nil, fmt.Errorf("could not comment on issue %s: %w", summary, err)
 	}
 	logEntry(issue.Key, summary).Infof("Created comment %s", addComment.ID)
+
+	// Update priority based on comment count if auto-priority is enabled
+	if err := j.updatePriorityIfNeeded(issue.Key); err != nil {
+		logEntry(issue.Key, summary).WithError(err).Warn("Failed to update priority")
+	}
+
 	return &issueWithTestCase, nil
 }
 
@@ -655,16 +663,18 @@ type params struct {
 	BaseLink     string
 	BuildLink    string
 
-	threshold       int
-	dryRun          bool
-	jiraUrl         *url.URL
-	jiraProject     string
-	junitReportsDir string
-	timestamp       string
-	csvOutput       string
-	htmlOutput      string
-	slackOutput     string
-	summaryOutput   string
+	threshold          int
+	dryRun             bool
+	jiraUrl            *url.URL
+	jiraProject        string
+	junitReportsDir    string
+	timestamp          string
+	csvOutput          string
+	htmlOutput         string
+	slackOutput        string
+	summaryOutput      string
+	enableAutoPriority bool
+	priorityThresholds string
 }
 
 func newJ2jTestCase(testCase testcase.TestCase, p params) j2jTestCase {

@@ -40,6 +40,8 @@ Usage of junit2jira:
     	Enable debug log level
   -dry-run
     	When set to true issues will NOT be created.
+  -enable-auto-priority
+    	Enable automatic priority escalation based on comment count.
   -html-output string
     	Generate HTML report to this file (use dash [-] for stdout)
   -jira-url string
@@ -50,6 +52,8 @@ Usage of junit2jira:
     	Dir that contains jUnit reports XML files
   -orchestrator string
     	Orchestrator name (such as GKE or OpenShift), if any.
+  -priority-thresholds string
+    	Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical). (default "4,16,64,128,256")
   -slack-output string
     	Generate JSON output in slack format (use dash [-] for stdout)
   -threshold int
@@ -59,6 +63,28 @@ Usage of junit2jira:
   -v	short alias for -version
   -version
     	print version information and exit
+```
+
+*Auto-Priority Escalation*
+
+The `--enable-auto-priority` flag enables automatic priority escalation based on the number of comments on an issue. When enabled, each time a comment is added to an existing issue, the priority is automatically updated based on the comment count:
+
+| Comment Count | Priority | Description |
+|--------------|----------|-------------|
+| 0-3 | Undefined | Default - new or infrequent failure |
+| 4-15 | Minor | Recurring issue - needs attention |
+| 16-63 | Normal | Persistent problem - regular review |
+| 64-127 | Major | Serious recurring failure - priority attention |
+| 128-255 | Blocker | Critical recurring failure - blocking work |
+| 256+ | Critical | Extremely critical - immediate action required |
+
+The thresholds can be customized using the `--priority-thresholds` flag. For example, to use thresholds of 10, 50, 100, 200, and 400:
+
+```shell
+junit2jira \
+  --enable-auto-priority \
+  --priority-thresholds "10,50,100,200,400" \
+  ...
 ```
 
 *Authentication*
