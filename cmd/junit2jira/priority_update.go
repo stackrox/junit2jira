@@ -90,19 +90,54 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 
 	// Count comments
 	commentCount := 0
-	var comments []*models.IssueCommentScheme
 	if issue.Fields != nil && issue.Fields.Comment != nil {
 		commentCount = issue.Fields.Comment.Total
-		comments = issue.Fields.Comment.Comments
+	}
+
+	// Fetch all comment pages
+	var allComments []*models.IssueCommentScheme
+	if commentCount > 0 {
+		startAt := 0
+		maxResults := 50
+		for {
+			commentsPage, response, err := j.jiraClient.Issue.Comment.Gets(
+				context.TODO(),
+				issueKey,
+				"created", // orderBy
+				nil,       // expand
+				startAt,
+				maxResults,
+			)
+			if err != nil {
+				logError(err, response)
+				return fmt.Errorf("could not fetch comments for issue %s: %w", issueKey, err)
+			}
+
+			if commentsPage != nil && commentsPage.Comments != nil {
+				allComments = append(allComments, commentsPage.Comments...)
+			}
+
+			// Check if we've fetched all comments
+			if commentsPage == nil || len(commentsPage.Comments) < maxResults {
+				break
+			}
+
+			startAt += maxResults
+		}
 	}
 
 	// Count comments in time windows for time-based escalation
-	last30Days, last10Days := countCommentsInTimeWindows(comments)
+	last30Days, last10Days := countCommentsInTimeWindows(allComments)
 
 	// Get current priority
 	currentPriority := Undefined
+	currentPriorityRecognized := true
 	if issue.Fields != nil && issue.Fields.Priority != nil {
-		currentPriority = parsePriority(issue.Fields.Priority.Name)
+		currentPriority, currentPriorityRecognized = parsePriority(issue.Fields.Priority.Name)
+		if !currentPriorityRecognized {
+			logEntry(issueKey, "").Warnf("Unrecognized priority %q, skipping auto-escalation", issue.Fields.Priority.Name)
+			return nil
+		}
 	}
 
 	// Calculate target priority with time-based escalation

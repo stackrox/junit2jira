@@ -28,24 +28,28 @@ func (p Priority) String() string {
 	}
 }
 
-func parsePriority(name string) Priority {
+func parsePriority(name string) (Priority, bool) {
 	switch name {
 	case "Critical":
-		return Critical
+		return Critical, true
 	case "Blocker":
-		return Blocker
+		return Blocker, true
 	case "Major":
-		return Major
+		return Major, true
 	case "Normal":
-		return Normal
+		return Normal, true
 	case "Minor":
-		return Minor
+		return Minor, true
+	case "Undefined":
+		return Undefined, true
 	default:
-		return Undefined
+		return Undefined, false
 	}
 }
 
 var defaultPriorityThresholds = []int{2, 10, 50, 100, 200}
+
+const defaultPriorityThresholdsStr = "2,10,50,100,200"
 
 // calculatePriority maps comment count to JIRA priority using default thresholds
 func calculatePriority(commentCount int) Priority {
@@ -53,10 +57,26 @@ func calculatePriority(commentCount int) Priority {
 }
 
 // calculatePriorityWithThresholds maps comment count to JIRA priority using custom thresholds
-// thresholds should contain exactly 5 values for: Minor, Normal, Major, Blocker, Critical
+// thresholds should contain exactly 5 non-negative, strictly ascending values for: Minor, Normal, Major, Blocker, Critical
 func calculatePriorityWithThresholds(commentCount int, thresholds []int) Priority {
+	// Validate thresholds: must have exactly 5 values, all non-negative, and strictly ascending
 	if len(thresholds) != 5 {
 		thresholds = defaultPriorityThresholds
+	} else {
+		valid := true
+		for i := 0; i < 5; i++ {
+			if thresholds[i] < 0 {
+				valid = false
+				break
+			}
+			if i > 0 && thresholds[i] <= thresholds[i-1] {
+				valid = false
+				break
+			}
+		}
+		if !valid {
+			thresholds = defaultPriorityThresholds
+		}
 	}
 
 	switch {

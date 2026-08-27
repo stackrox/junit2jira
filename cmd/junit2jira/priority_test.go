@@ -74,6 +74,19 @@ func TestCalculatePriorityWithCustomThresholds(t *testing.T) {
 		{"custom: 100 comments", 100, []int{10, 50, 100, 200, 400}, Major},
 		{"custom: 200 comments", 200, []int{10, 50, 100, 200, 400}, Blocker},
 		{"custom: 400 comments", 400, []int{10, 50, 100, 200, 400}, Critical},
+
+		// Invalid thresholds - negative values (should fall back to defaults)
+		{"negative threshold", 50, []int{-1, 10, 50, 100, 200}, Major},
+		{"multiple negative", 100, []int{2, -5, 50, 100, 200}, Blocker},
+
+		// Invalid thresholds - non-ascending (should fall back to defaults)
+		{"equal values", 50, []int{2, 10, 10, 100, 200}, Major},
+		{"descending", 100, []int{200, 100, 50, 10, 2}, Blocker},
+		{"partially descending", 50, []int{2, 50, 30, 100, 200}, Major},
+
+		// Invalid thresholds - wrong count (should fall back to defaults)
+		{"too few", 50, []int{2, 10, 50}, Major},
+		{"too many", 100, []int{2, 10, 50, 100, 200, 300}, Blocker},
 	}
 
 	for _, tt := range tests {
@@ -131,23 +144,26 @@ func TestPriorityString(t *testing.T) {
 
 func TestParsePriority(t *testing.T) {
 	tests := []struct {
-		name     string
-		expected Priority
+		name       string
+		expected   Priority
+		recognized bool
 	}{
-		{"Undefined", Undefined},
-		{"Minor", Minor},
-		{"Normal", Normal},
-		{"Major", Major},
-		{"Blocker", Blocker},
-		{"Critical", Critical},
-		{"Unknown", Undefined},
-		{"", Undefined},
+		{"Undefined", Undefined, true},
+		{"Minor", Minor, true},
+		{"Normal", Normal, true},
+		{"Major", Major, true},
+		{"Blocker", Blocker, true},
+		{"Critical", Critical, true},
+		{"Unknown", Undefined, false},
+		{"", Undefined, false},
+		{"CustomPriority", Undefined, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parsePriority(tt.name)
+			result, recognized := parsePriority(tt.name)
 			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.recognized, recognized)
 		})
 	}
 }

@@ -68,7 +68,7 @@ func main() {
 	flag.StringVar(&p.JobName, "job-name", "", "Name of CI job.")
 	flag.StringVar(&p.Orchestrator, "orchestrator", "", "Orchestrator name (such as GKE or OpenShift), if any.")
 	flag.BoolVar(&p.enableAutoPriority, "enable-auto-priority", false, "Enable automatic priority escalation based on comment count.")
-	flag.StringVar(&p.priorityThresholds, "priority-thresholds", "4,16,64,128,256", "Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical).")
+	flag.StringVar(&p.priorityThresholds, "priority-thresholds", defaultPriorityThresholdsStr, "Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical).")
 	flag.BoolVar(&debug, "debug", false, "Enable debug log level")
 	versioninfo.AddFlag(flag.CommandLine)
 	flag.Parse()

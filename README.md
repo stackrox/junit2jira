@@ -53,7 +53,7 @@ Usage of junit2jira:
   -orchestrator string
     	Orchestrator name (such as GKE or OpenShift), if any.
   -priority-thresholds string
-    	Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical). (default "4,16,64,128,256")
+    	Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical). (default "2,10,50,100,200")
   -slack-output string
     	Generate JSON output in slack format (use dash [-] for stdout)
   -threshold int
@@ -67,16 +67,36 @@ Usage of junit2jira:
 
 *Auto-Priority Escalation*
 
-The `--enable-auto-priority` flag enables automatic priority escalation based on the number of comments on an issue. When enabled, each time a comment is added to an existing issue, the priority is automatically updated based on the comment count:
+The `--enable-auto-priority` flag enables automatic priority escalation based on the number of comments on an issue. When enabled, each time a comment is added to an existing issue, the priority is automatically updated based on both total comment count and recent activity.
+
+**Base Priority (Total Comment Count)**
+
+The baseline priority is determined by the total number of comments:
 
 | Comment Count | Priority | Description |
 |--------------|----------|-------------|
-| 0-3 | Undefined | Default - new or infrequent failure |
-| 4-15 | Minor | Recurring issue - needs attention |
-| 16-63 | Normal | Persistent problem - regular review |
-| 64-127 | Major | Serious recurring failure - priority attention |
-| 128-255 | Blocker | Critical recurring failure - blocking work |
-| 256+ | Critical | Extremely critical - immediate action required |
+| 0-1 | Undefined | Default - new or infrequent failure |
+| 2-9 | Minor | Recurring issue - needs attention |
+| 10-49 | Normal | Persistent problem - regular review |
+| 50-99 | Major | Serious recurring failure - priority attention |
+| 100-199 | Blocker | Critical recurring failure - blocking work |
+| 200+ | Critical | Extremely critical - immediate action required |
+
+**Time-Based Escalation (Recent Activity)**
+
+Recent activity over the last 10 days and 30 days can escalate the priority higher than the baseline:
+
+- **Last 10 days** (hot issues - immediate escalation):
+  - 10+ comments → Critical
+  - 5-9 comments → Major (minimum)
+
+- **Last 30 days** (active trends):
+  - 50+ comments → Critical (minimum)
+  - 20-49 comments → Blocker (minimum)
+  - 10-19 comments → Major (minimum)
+  - 5-9 comments → Normal (minimum)
+
+The final priority is the highest value from the baseline and recent activity checks. This catches both persistent issues (high total) and hot issues (high recent activity).
 
 The thresholds can be customized using the `--priority-thresholds` flag. For example, to use thresholds of 10, 50, 100, 200, and 400:
 
