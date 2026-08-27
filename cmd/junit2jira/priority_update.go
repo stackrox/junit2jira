@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 	log "github.com/sirupsen/logrus"
@@ -27,6 +28,39 @@ func parsePriorityThresholds(thresholdsStr string) ([]int, error) {
 	}
 
 	return thresholds, nil
+}
+
+// countCommentsInTimeWindows counts comments in the last 10 and 30 days
+func countCommentsInTimeWindows(comments []*models.IssueCommentScheme) (last30Days, last10Days int) {
+	now := time.Now()
+	thirtyDaysAgo := now.AddDate(0, 0, -30)
+	tenDaysAgo := now.AddDate(0, 0, -10)
+
+	for _, comment := range comments {
+		if comment.Created == "" {
+			continue
+		}
+
+		// Parse comment created timestamp
+		// JIRA format: "2006-01-02T15:04:05.000-0700"
+		created, err := time.Parse("2006-01-02T15:04:05.000-0700", comment.Created)
+		if err != nil {
+			// Try RFC3339 format as fallback
+			created, err = time.Parse(time.RFC3339, comment.Created)
+			if err != nil {
+				continue
+			}
+		}
+
+		if created.After(thirtyDaysAgo) {
+			last30Days++
+		}
+		if created.After(tenDaysAgo) {
+			last10Days++
+		}
+	}
+
+	return last30Days, last10Days
 }
 
 // updatePriorityIfNeeded updates issue priority based on comment count
@@ -56,9 +90,14 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 
 	// Count comments
 	commentCount := 0
+	var comments []*models.IssueCommentScheme
 	if issue.Fields != nil && issue.Fields.Comment != nil {
 		commentCount = issue.Fields.Comment.Total
+		comments = issue.Fields.Comment.Comments
 	}
+
+	// Count comments in time windows for time-based escalation
+	last30Days, last10Days := countCommentsInTimeWindows(comments)
 
 	// Get current priority
 	currentPriority := Undefined
@@ -66,12 +105,13 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 		currentPriority = parsePriority(issue.Fields.Priority.Name)
 	}
 
-	// Calculate target priority
-	targetPriority := calculatePriorityWithThresholds(commentCount, thresholds)
+	// Calculate target priority with time-based escalation
+	targetPriority := calculatePriorityWithTimeEscalation(commentCount, last30Days, last10Days, thresholds)
 
 	// Only escalate if target priority is higher than current
 	if targetPriority > currentPriority {
-		logEntry(issueKey, "").Infof("Auto-escalating priority from %s to %s (comment count: %d)", currentPriority, targetPriority, commentCount)
+		logEntry(issueKey, "").Infof("Auto-escalating priority from %s to %s (total: %d, last 30d: %d, last 10d: %d)",
+			currentPriority, targetPriority, commentCount, last30Days, last10Days)
 
 		if j.dryRun {
 			logEntry(issueKey, "").Debug("Dry run: would update priority")

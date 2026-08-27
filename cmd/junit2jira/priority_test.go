@@ -12,33 +12,34 @@ func TestCalculatePriority(t *testing.T) {
 		commentCount int
 		expected     Priority
 	}{
-		// Undefined: 0-3 comments
+		// New thresholds: [2, 10, 50, 100, 200]
+
+		// Undefined: 0-1 comments
 		{"zero comments", 0, Undefined},
 		{"one comment", 1, Undefined},
-		{"three comments", 3, Undefined},
 
-		// Minor: 4-15 comments
-		{"four comments (threshold)", 4, Minor},
-		{"ten comments", 10, Minor},
-		{"fifteen comments", 15, Minor},
+		// Minor: 2-9 comments
+		{"two comments (threshold)", 2, Minor},
+		{"five comments", 5, Minor},
+		{"nine comments", 9, Minor},
 
-		// Normal: 16-63 comments
-		{"sixteen comments (threshold)", 16, Normal},
+		// Normal: 10-49 comments
+		{"ten comments (threshold)", 10, Normal},
 		{"thirty comments", 30, Normal},
-		{"sixty-three comments", 63, Normal},
+		{"forty-nine comments", 49, Normal},
 
-		// Major: 64-127 comments
-		{"sixty-four comments (threshold)", 64, Major},
-		{"one hundred comments", 100, Major},
-		{"one hundred twenty-seven comments", 127, Major},
+		// Major: 50-99 comments
+		{"fifty comments (threshold)", 50, Major},
+		{"seventy-five comments", 75, Major},
+		{"ninety-nine comments", 99, Major},
 
-		// Blocker: 128-255 comments
-		{"one hundred twenty-eight comments (threshold)", 128, Blocker},
-		{"two hundred comments", 200, Blocker},
-		{"two hundred fifty-five comments", 255, Blocker},
+		// Blocker: 100-199 comments
+		{"one hundred comments (threshold)", 100, Blocker},
+		{"one hundred fifty comments", 150, Blocker},
+		{"one hundred ninety-nine comments", 199, Blocker},
 
-		// Critical: 256+ comments
-		{"two hundred fifty-six comments (threshold)", 256, Critical},
+		// Critical: 200+ comments
+		{"two hundred comments (threshold)", 200, Critical},
 		{"five hundred comments", 500, Critical},
 		{"one thousand comments", 1000, Critical},
 	}
@@ -147,6 +148,79 @@ func TestParsePriority(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parsePriority(tt.name)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMaxPriority(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        Priority
+		b        Priority
+		expected Priority
+	}{
+		{"Critical vs Major", Critical, Major, Critical},
+		{"Major vs Critical", Major, Critical, Critical},
+		{"Normal vs Minor", Normal, Minor, Normal},
+		{"Same priority", Major, Major, Major},
+		{"Undefined vs Minor", Undefined, Minor, Minor},
+		{"Critical vs Undefined", Critical, Undefined, Critical},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := maxPriority(tt.a, tt.b)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestCalculatePriorityWithTimeEscalation(t *testing.T) {
+	tests := []struct {
+		name         string
+		total        int
+		last30       int
+		last10       int
+		expected     Priority
+		reason       string
+	}{
+		// Hot issues (last 10 days triggers escalation)
+		{"Very hot issue", 24, 21, 12, Critical, "12 in last 10 days"},
+		{"Hot burst", 7, 7, 7, Major, "7 in last 10 days"},
+		{"Recent spike", 39, 23, 7, Major, "7 in last 10 days"},
+		{"Extremely hot", 5, 5, 15, Critical, "15 in last 10 days"},
+		{"Just hot", 3, 3, 5, Major, "5 in last 10 days"},
+
+		// Active issues (last 30 days triggers escalation)
+		{"Sustained high", 36, 21, 1, Blocker, "21 in last 30 days"},
+		{"Very active", 50, 50, 0, Critical, "50 in last 30 days"},
+		{"Active trend", 24, 15, 0, Major, "15 in last 30 days → escalated to Major"},
+		{"Moderate activity", 10, 7, 0, Normal, "7 in last 30 days"},
+		{"Low recent", 100, 3, 0, Blocker, "High total, low recent"},
+
+		// Persistent issues (total drives priority)
+		{"Historic high", 842, 0, 0, Critical, "High total"},
+		{"Stale but important", 65, 0, 0, Major, "High total, no recent"},
+		{"Persistent moderate", 58, 2, 1, Major, "Total drives priority"},
+
+		// Combined signals
+		{"All signals high", 253, 100, 50, Critical, "All Critical"},
+		{"Mixed signals", 14, 14, 4, Major, "Total=Normal, escalated by last 30d"},
+
+		// Low activity
+		{"Minimal", 1, 1, 1, Undefined, "Below all thresholds"},
+		{"Some activity", 5, 2, 0, Minor, "5 total → Minor (no escalation with only 2 in last 30d)"},
+		{"Low total, low recent", 3, 1, 0, Minor, "3 total -> Minor"},
+	}
+
+	thresholds := []int{2, 10, 50, 100, 200}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := calculatePriorityWithTimeEscalation(tt.total, tt.last30, tt.last10, thresholds)
+			assert.Equal(t, tt.expected, result,
+				"Issue with %d total, %d last30, %d last10 should be %s (%s)",
+				tt.total, tt.last30, tt.last10, tt.expected, tt.reason)
 		})
 	}
 }

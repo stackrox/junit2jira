@@ -45,7 +45,7 @@ func parsePriority(name string) Priority {
 	}
 }
 
-var defaultPriorityThresholds = []int{4, 16, 64, 128, 256}
+var defaultPriorityThresholds = []int{2, 10, 50, 100, 200}
 
 // calculatePriority maps comment count to JIRA priority using default thresholds
 func calculatePriority(commentCount int) Priority {
@@ -73,4 +73,45 @@ func calculatePriorityWithThresholds(commentCount int, thresholds []int) Priorit
 	default:
 		return Undefined
 	}
+}
+
+// maxPriority returns the higher of two priorities
+func maxPriority(a, b Priority) Priority {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// calculatePriorityWithTimeEscalation applies layered escalation based on total comments
+// and recent activity (last 30 days and last 10 days).
+// This catches both persistent issues (high total) and hot issues (high recent activity).
+func calculatePriorityWithTimeEscalation(totalComments, last30Days, last10Days int, thresholds []int) Priority {
+	// Step 1: Calculate base priority from total comments
+	basePriority := calculatePriorityWithThresholds(totalComments, thresholds)
+
+	// Step 2: Check last 10 days for HOT issues (immediate escalation)
+	if last10Days >= 10 {
+		return Critical // Top 11% - extremely hot
+	}
+	if last10Days >= 5 {
+		return maxPriority(basePriority, Major) // Top 17% - very active
+	}
+
+	// Step 3: Check last 30 days for active trends
+	if last30Days >= 50 {
+		return maxPriority(basePriority, Critical) // Top 7% - sustained high
+	}
+	if last30Days >= 20 {
+		return maxPriority(basePriority, Blocker) // Top 13% - very active
+	}
+	if last30Days >= 10 {
+		return maxPriority(basePriority, Major) // Top 17% - active
+	}
+	if last30Days >= 5 {
+		return maxPriority(basePriority, Normal) // Top 28% - noticeable
+	}
+
+	// Step 4: Fall back to base priority
+	return basePriority
 }
