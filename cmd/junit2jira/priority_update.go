@@ -56,21 +56,21 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 
 	// Count comments
 	commentCount := 0
-	if issue.Fields != nil && issue.Fields.Comment != nil && issue.Fields.Comment.Comments != nil {
-		commentCount = len(issue.Fields.Comment.Comments)
+	if issue.Fields != nil && issue.Fields.Comment != nil {
+		commentCount = issue.Fields.Comment.Total
 	}
 
 	// Get current priority
-	currentPriority := "Undefined"
+	currentPriority := Undefined
 	if issue.Fields != nil && issue.Fields.Priority != nil {
-		currentPriority = issue.Fields.Priority.Name
+		currentPriority = parsePriority(issue.Fields.Priority.Name)
 	}
 
 	// Calculate target priority
 	targetPriority := calculatePriorityWithThresholds(commentCount, thresholds)
 
-	// Update if changed
-	if currentPriority != targetPriority {
+	// Only escalate if target priority is higher than current
+	if targetPriority > currentPriority {
 		logEntry(issueKey, "").Infof("Auto-escalating priority from %s to %s (comment count: %d)", currentPriority, targetPriority, commentCount)
 
 		if j.dryRun {
@@ -82,7 +82,7 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 		updatePayload := &models.IssueScheme{
 			Fields: &models.IssueFieldsScheme{
 				Priority: &models.PriorityScheme{
-					Name: targetPriority,
+					Name: targetPriority.String(),
 				},
 			},
 		}
