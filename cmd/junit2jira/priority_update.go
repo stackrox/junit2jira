@@ -131,7 +131,7 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 
 	// Get current priority
 	currentPriority := Undefined
-	currentPriorityRecognized := true
+	var currentPriorityRecognized bool
 	if issue.Fields != nil && issue.Fields.Priority != nil {
 		currentPriority, currentPriorityRecognized = parsePriority(issue.Fields.Priority.Name)
 		if !currentPriorityRecognized {
