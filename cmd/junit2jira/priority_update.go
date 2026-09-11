@@ -171,7 +171,7 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 
 		logEntry(issueKey, "").Infof("Updated priority to %s", targetPriority)
 	} else {
-		logEntry(issueKey, "").Debugf("Priority %s is already correct for %d comments", currentPriority, commentCount)
+		logEntry(issueKey, "").Debugf("Priority %s is already high enough for %d comments", currentPriority, commentCount)
 	}
 
 	return nil
