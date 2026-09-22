@@ -81,20 +81,16 @@ func (j junit2jira) updatePriorityIfNeeded(ctx context.Context, issueKey string)
 		return fmt.Errorf("priority thresholds have not been configured")
 	}
 
-	issue, response, err := j.jiraClient.Issue.Get(ctx, issueKey, []string{"priority", "comment"}, nil)
+	issue, response, err := j.jiraClient.Issue.Get(ctx, issueKey, []string{"priority"}, nil)
 	if err != nil {
 		logError(err, response)
 		return fmt.Errorf("could not fetch issue %s: %w", issueKey, err)
 	}
 
-	totalComments := 0
-	if issue != nil && issue.Fields != nil && issue.Fields.Comment != nil {
-		totalComments = issue.Fields.Comment.Total
-	}
-
 	const pageSize = 50
-	comments := make([]*models.IssueCommentScheme, 0, totalComments)
-	for startAt := 0; startAt < totalComments; {
+	var comments []*models.IssueCommentScheme
+	// Use the comment endpoint's totals; the issue's embedded count can be stale.
+	for startAt := 0; ; {
 		page, response, err := j.jiraClient.Issue.Comment.Gets(ctx, issueKey, "created", nil, startAt, pageSize)
 		if err != nil {
 			logError(err, response)
@@ -105,8 +101,8 @@ func (j junit2jira) updatePriorityIfNeeded(ctx context.Context, issueKey string)
 		}
 		comments = append(comments, page.Comments...)
 		startAt += len(page.Comments)
-		if page.Total > totalComments {
-			totalComments = page.Total
+		if startAt >= page.Total {
+			break
 		}
 	}
 

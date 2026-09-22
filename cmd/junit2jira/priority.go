@@ -52,6 +52,9 @@ func parsePriority(name string) (Priority, bool) {
 	}
 }
 
+// defaultPriorityThresholds are minimum comment counts within the configured
+// activity window for Minor, Normal, Major, Blocker, and Critical, respectively.
+// Keep the defaults and count ranges in README.md in sync when changing these.
 var defaultPriorityThresholds = []int{2, 10, 50, 100, 200}
 
 func priorityThresholdsString(thresholds []int) string {

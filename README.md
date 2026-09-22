@@ -69,9 +69,19 @@ Usage of junit2jira:
 
 *Auto-Priority Escalation*
 
-The `--enable-auto-priority` flag enables automatic priority escalation based on comments in one recent activity window. When enabled, each time a comment is added to an existing issue, the priority is updated from the number of comments in the configured window. The default window is 30 days and can be changed with `--priority-window-days`.
+Automatic priority escalation is disabled by default. With `--enable-auto-priority`,
+`junit2jira` evaluates an existing issue after successfully adding a comment to it.
+It counts comments in one recent activity window, which defaults to 30 days and
+can be changed with `--priority-window-days`. Newly created issues are not evaluated
+for escalation during that run.
 
-Thresholds map the count in that window to priority:
+All available comment pages are fetched before counting. Comments from any author
+count if their creation timestamp is strictly after the window's start; comments
+exactly at the cutoff are excluded. Comments with missing or unparseable timestamps
+are skipped. Unparseable timestamps produce at most one warning per issue evaluation,
+including the timestamp and zero-based comment index.
+
+The default thresholds map the comment count in that window to a target priority:
 
 | Window count | Priority |
 |-------------|----------|
@@ -82,12 +92,26 @@ Thresholds map the count in that window to priority:
 | 100-199 | Blocker |
 | 200+ | Critical |
 
-The thresholds can be customized using the `--priority-thresholds` flag. For example, to use thresholds of 10, 50, 100, 200, and 400:
+These are fixed comment-count thresholds, not percentile targets. Priority is only
+raised: for example, an issue with 12 recent comments moves from Minor to Normal,
+but an issue already at Blocker stays at Blocker. Unrecognized Jira priority names
+are left unchanged with a warning.
+
+`--priority-window-days` must be a positive integer. `--priority-thresholds` must
+contain exactly five comma-separated, non-negative integers in strictly ascending
+order, corresponding to Minor, Normal, Major, Blocker, and Critical. Invalid
+configuration is rejected at startup, even when automatic escalation is disabled.
+
+With `--dry-run`, no comment is added and automatic priority evaluation is skipped;
+the command does not preview the resulting priority.
+
+For example, to count comments from the last 10 days and use thresholds of
+10, 50, 100, 200, and 400:
 
 ```shell
 junit2jira \
   --enable-auto-priority \
-  --priority-window-days 30 \
+  --priority-window-days 10 \
   --priority-thresholds "10,50,100,200,400" \
   ...
 ```

@@ -29,6 +29,7 @@ func TestCountCommentsInWindow(t *testing.T) {
 		{Created: "2026-08-12T12:00:00.000+0000"},
 		{Created: "not-a-timestamp"},
 		nil,
+		{Created: "another-invalid-timestamp"},
 	}
 	warnings := 0
 	count := countCommentsInWindow(comments, 30, now, func(index int, timestamp string) {
