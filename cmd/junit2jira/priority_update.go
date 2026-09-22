@@ -140,7 +140,6 @@ func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
 		}
 	}
 
-	// Calculate target priority with time-based escalation
 	targetPriority := calculatePriorityWithTimeEscalation(commentCount, last30Days, last10Days, thresholds)
 
 	// Only escalate if target priority is higher than current
