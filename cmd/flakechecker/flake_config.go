@@ -100,7 +100,7 @@ func loadFlakeConfigFile(fileName string) ([]*flakeDetectionPolicy, error) {
 	for _, flakeConfig := range flakeConfigs {
 		detectionPolicy, errNewPolicy := newFlakeDetectionPolicy(flakeConfig)
 		if errNewPolicy != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("create flake detection policy from config: %v", flakeConfig))
+			return nil, errors.Wrap(errNewPolicy, fmt.Sprintf("create flake detection policy from config: %v", flakeConfig))
 		}
 
 		detectionPolicies = append(detectionPolicies, detectionPolicy)

@@ -32,25 +32,43 @@ func TestParsePriorityThresholds(t *testing.T) {
 		{
 			name:        "invalid - too few values",
 			input:       "4,16,64",
-			expected:    defaultPriorityThresholds,
+			expected:    nil,
 			expectError: true,
 		},
 		{
 			name:        "invalid - too many values",
 			input:       "4,16,64,128,256,512",
-			expected:    defaultPriorityThresholds,
+			expected:    nil,
 			expectError: true,
 		},
 		{
 			name:        "invalid - non-numeric value",
 			input:       "4,16,abc,128,256",
-			expected:    defaultPriorityThresholds,
+			expected:    nil,
 			expectError: true,
 		},
 		{
 			name:        "empty string",
 			input:       "",
-			expected:    defaultPriorityThresholds,
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "negative value",
+			input:       "-1,16,64,128,256",
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "duplicate values",
+			input:       "4,16,16,128,256",
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "descending values",
+			input:       "256,128,64,16,4",
+			expected:    nil,
 			expectError: true,
 		},
 	}

@@ -8,170 +8,140 @@ import (
 	"time"
 
 	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
-	log "github.com/sirupsen/logrus"
 )
 
-// parsePriorityThresholds parses comma-separated threshold string into int slice
 func parsePriorityThresholds(thresholdsStr string) ([]int, error) {
 	parts := strings.Split(thresholdsStr, ",")
-	if len(parts) != 5 {
-		return defaultPriorityThresholds, fmt.Errorf("expected 5 thresholds, got %d", len(parts))
+	if len(parts) != len(defaultPriorityThresholds) {
+		return nil, fmt.Errorf("expected %d thresholds, got %d", len(defaultPriorityThresholds), len(parts))
 	}
 
-	thresholds := make([]int, 5)
+	thresholds := make([]int, len(parts))
 	for i, part := range parts {
-		val, err := strconv.Atoi(strings.TrimSpace(part))
+		value, err := strconv.Atoi(strings.TrimSpace(part))
 		if err != nil {
-			return defaultPriorityThresholds, fmt.Errorf("invalid threshold value %q: %w", part, err)
+			return nil, fmt.Errorf("invalid threshold value %q: %w", part, err)
 		}
-		thresholds[i] = val
+		if value < 0 {
+			return nil, fmt.Errorf("threshold %d must not be negative", i+1)
+		}
+		if i > 0 && value <= thresholds[i-1] {
+			return nil, fmt.Errorf("thresholds must be strictly ascending")
+		}
+		thresholds[i] = value
 	}
-
 	return thresholds, nil
 }
 
-// countCommentsInTimeWindows counts comments in the last 10 and 30 days
-func countCommentsInTimeWindows(comments []*models.IssueCommentScheme) (last30Days, last10Days int) {
-	now := time.Now()
-	thirtyDaysAgo := now.AddDate(0, 0, -30)
-	tenDaysAgo := now.AddDate(0, 0, -10)
-
-	for _, comment := range comments {
-		if comment.Created == "" {
+func countCommentsInWindow(comments []*models.IssueCommentScheme, windowDays int, now time.Time, warn func(index int, timestamp string)) int {
+	windowStart := now.AddDate(0, 0, -windowDays)
+	count := 0
+	warned := false
+	for index, comment := range comments {
+		if comment == nil || comment.Created == "" {
 			continue
 		}
 
-		// Parse comment created timestamp
-		// JIRA format: "2006-01-02T15:04:05.000-0700"
-		created, err := time.Parse("2006-01-02T15:04:05.000-0700", comment.Created)
+		created, err := parseCommentTime(comment.Created)
 		if err != nil {
-			// Try RFC3339 format as fallback
-			created, err = time.Parse(time.RFC3339, comment.Created)
-			if err != nil {
-				continue
+			if !warned {
+				warn(index, comment.Created)
+				warned = true
 			}
+			continue
 		}
-
-		if created.After(thirtyDaysAgo) {
-			last30Days++
-		}
-		if created.After(tenDaysAgo) {
-			last10Days++
+		if created.After(windowStart) {
+			count++
 		}
 	}
-
-	return last30Days, last10Days
+	return count
 }
 
-// updatePriorityIfNeeded updates issue priority based on comment count
-func (j junit2jira) updatePriorityIfNeeded(issueKey string) error {
+func parseCommentTime(value string) (time.Time, error) {
+	for _, layout := range []string{
+		"2006-01-02T15:04:05.000-0700",
+		"2006-01-02T15:04:05-0700",
+		time.RFC3339,
+	} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unsupported timestamp format")
+}
+
+func (j junit2jira) updatePriorityIfNeeded(ctx context.Context, issueKey string) error {
 	if !j.enableAutoPriority {
 		return nil
 	}
-
-	// Parse thresholds
-	thresholds, err := parsePriorityThresholds(j.priorityThresholds)
-	if err != nil {
-		log.WithError(err).Warn("Failed to parse priority thresholds, using defaults")
-		thresholds = defaultPriorityThresholds
+	if j.priorityWindowDays <= 0 {
+		return fmt.Errorf("priority window must be positive")
+	}
+	if len(j.parsedPriorityThresholds) != len(defaultPriorityThresholds) {
+		return fmt.Errorf("priority thresholds have not been configured")
 	}
 
-	// Get issue with comments to count them
-	issue, response, err := j.jiraClient.Issue.Get(
-		context.TODO(),
-		issueKey,
-		[]string{"priority", "comment"}, // fields
-		nil,                              // expand
-	)
+	issue, response, err := j.jiraClient.Issue.Get(ctx, issueKey, []string{"priority", "comment"}, nil)
 	if err != nil {
 		logError(err, response)
 		return fmt.Errorf("could not fetch issue %s: %w", issueKey, err)
 	}
 
-	// Count comments
-	commentCount := 0
-	if issue.Fields != nil && issue.Fields.Comment != nil {
-		commentCount = issue.Fields.Comment.Total
+	totalComments := 0
+	if issue != nil && issue.Fields != nil && issue.Fields.Comment != nil {
+		totalComments = issue.Fields.Comment.Total
 	}
 
-	// Fetch all comment pages
-	var allComments []*models.IssueCommentScheme
-	if commentCount > 0 {
-		startAt := 0
-		maxResults := 50
-		for {
-			commentsPage, response, err := j.jiraClient.Issue.Comment.Gets(
-				context.TODO(),
-				issueKey,
-				"created", // orderBy
-				nil,       // expand
-				startAt,
-				maxResults,
-			)
-			if err != nil {
-				logError(err, response)
-				return fmt.Errorf("could not fetch comments for issue %s: %w", issueKey, err)
-			}
-
-			if commentsPage != nil && commentsPage.Comments != nil {
-				allComments = append(allComments, commentsPage.Comments...)
-			}
-
-			// Check if we've fetched all comments
-			if commentsPage == nil || len(commentsPage.Comments) < maxResults {
-				break
-			}
-
-			startAt += maxResults
+	const pageSize = 50
+	comments := make([]*models.IssueCommentScheme, 0, totalComments)
+	for startAt := 0; startAt < totalComments; {
+		page, response, err := j.jiraClient.Issue.Comment.Gets(ctx, issueKey, "created", nil, startAt, pageSize)
+		if err != nil {
+			logError(err, response)
+			return fmt.Errorf("could not fetch comments for issue %s: %w", issueKey, err)
+		}
+		if page == nil || len(page.Comments) == 0 {
+			break
+		}
+		comments = append(comments, page.Comments...)
+		startAt += len(page.Comments)
+		if page.Total > totalComments {
+			totalComments = page.Total
 		}
 	}
 
-	// Count comments in time windows for time-based escalation
-	last30Days, last10Days := countCommentsInTimeWindows(allComments)
+	windowCount := countCommentsInWindow(comments, j.priorityWindowDays, time.Now(), func(index int, timestamp string) {
+		logEntry(issueKey, "").Warnf("Skipping comment %d with unparseable timestamp %q", index, timestamp)
+	})
 
-	// Get current priority
 	currentPriority := Undefined
-	var currentPriorityRecognized bool
-	if issue.Fields != nil && issue.Fields.Priority != nil {
-		currentPriority, currentPriorityRecognized = parsePriority(issue.Fields.Priority.Name)
-		if !currentPriorityRecognized {
+	if issue != nil && issue.Fields != nil && issue.Fields.Priority != nil {
+		var recognized bool
+		currentPriority, recognized = parsePriority(issue.Fields.Priority.Name)
+		if !recognized {
 			logEntry(issueKey, "").Warnf("Unrecognized priority %q, skipping auto-escalation", issue.Fields.Priority.Name)
 			return nil
 		}
 	}
 
-	targetPriority := calculatePriorityWithTimeEscalation(commentCount, last30Days, last10Days, thresholds)
-
-	// Only escalate if target priority is higher than current
-	if targetPriority > currentPriority {
-		logEntry(issueKey, "").Infof("Auto-escalating priority from %s to %s (total: %d, last 30d: %d, last 10d: %d)",
-			currentPriority, targetPriority, commentCount, last30Days, last10Days)
-
-		if j.dryRun {
-			logEntry(issueKey, "").Debug("Dry run: would update priority")
-			return nil
-		}
-
-		// Update the issue priority
-		updatePayload := &models.IssueScheme{
-			Fields: &models.IssueFieldsScheme{
-				Priority: &models.PriorityScheme{
-					Name: targetPriority.String(),
-				},
-			},
-		}
-
-		// Set notify to true - false requires admin permissions to suppress notifications
-		response, err := j.jiraClient.Issue.Update(context.TODO(), issueKey, true, updatePayload, nil, nil)
-		if err != nil {
-			logError(err, response)
-			return fmt.Errorf("could not update priority for issue %s: %w", issueKey, err)
-		}
-
-		logEntry(issueKey, "").Infof("Updated priority to %s", targetPriority)
-	} else {
-		logEntry(issueKey, "").Debugf("Priority %s is already high enough for %d comments", currentPriority, commentCount)
+	targetPriority := priorityForCommentCount(windowCount, j.parsedPriorityThresholds)
+	if targetPriority <= currentPriority {
+		logEntry(issueKey, "").Debugf("Priority %s is already high enough for %d comments in the last %d days", currentPriority, windowCount, j.priorityWindowDays)
+		return nil
 	}
 
+	logEntry(issueKey, "").Infof("Auto-escalating priority from %s to %s (%d comments in the last %d days)", currentPriority, targetPriority, windowCount, j.priorityWindowDays)
+	if j.dryRun {
+		logEntry(issueKey, "").Debug("Dry run: would update priority")
+		return nil
+	}
+
+	payload := &models.IssueScheme{Fields: &models.IssueFieldsScheme{Priority: &models.PriorityScheme{Name: targetPriority.String()}}}
+	response, err = j.jiraClient.Issue.Update(ctx, issueKey, true, payload, nil, nil)
+	if err != nil {
+		logError(err, response)
+		return fmt.Errorf("could not update priority for issue %s: %w", issueKey, err)
+	}
+	logEntry(issueKey, "").Infof("Updated priority to %s", targetPriority)
 	return nil
 }

@@ -68,7 +68,8 @@ func main() {
 	flag.StringVar(&p.JobName, "job-name", "", "Name of CI job.")
 	flag.StringVar(&p.Orchestrator, "orchestrator", "", "Orchestrator name (such as GKE or OpenShift), if any.")
 	flag.BoolVar(&p.enableAutoPriority, "enable-auto-priority", false, "Enable automatic priority escalation based on comment count.")
-	flag.StringVar(&p.priorityThresholds, "priority-thresholds", defaultPriorityThresholdsStr, "Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical).")
+	flag.StringVar(&p.priorityThresholds, "priority-thresholds", priorityThresholdsString(defaultPriorityThresholds), "Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical).")
+	flag.IntVar(&p.priorityWindowDays, "priority-window-days", 30, "Number of recent days used for automatic priority escalation.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug log level")
 	versioninfo.AddFlag(flag.CommandLine)
 	flag.Parse()
@@ -88,7 +89,7 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	err = run(p)
+	err = run(context.Background(), p)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,7 +106,16 @@ type testIssue struct {
 	testCase j2jTestCase
 }
 
-func run(p params) error {
+func run(ctx context.Context, p params) error {
+	if p.priorityWindowDays <= 0 {
+		return fmt.Errorf("priority window days must be positive, got %d", p.priorityWindowDays)
+	}
+	var err error
+	p.parsedPriorityThresholds, err = parsePriorityThresholds(p.priorityThresholds)
+	if err != nil {
+		return fmt.Errorf("invalid priority thresholds: %w", err)
+	}
+
 	// Check for username (email) for Basic Auth
 	jiraUser := os.Getenv("JIRA_USER")
 	jiraToken := os.Getenv("JIRA_TOKEN")
@@ -145,7 +155,7 @@ func run(p params) error {
 		return errors.Wrap(err, "could not find failed tests")
 	}
 
-	issues, err := j.createIssuesOrComments(failedTests)
+	issues, err := j.createIssuesOrComments(ctx, failedTests)
 	if err != nil {
 		return errors.Wrap(err, "could not create issues or comments")
 	}
@@ -279,11 +289,11 @@ func (j junit2jira) createCsv(testSuites []junit.Suite) error {
 	return junit2csv(testSuites, j.params, out)
 }
 
-func (j junit2jira) createIssuesOrComments(failedTests []j2jTestCase) ([]*testIssue, error) {
+func (j junit2jira) createIssuesOrComments(ctx context.Context, failedTests []j2jTestCase) ([]*testIssue, error) {
 	var result error
 	issues := make([]*testIssue, 0, len(failedTests))
 	for _, tc := range failedTests {
-		issue, err := j.createIssueOrComment(tc)
+		issue, err := j.createIssueOrComment(ctx, tc)
 		if err != nil {
 			result = multierror.Append(result, err)
 		}
@@ -327,14 +337,14 @@ func (j junit2jira) linkIssues(issues []*models.IssueScheme) error {
 	return result
 }
 
-func (j junit2jira) linkToClosedTicket(newIssue, closedIssue *models.IssueScheme) error {
+func (j junit2jira) linkToClosedTicket(ctx context.Context, newIssue, closedIssue *models.IssueScheme) error {
 	payload := &models.LinkPayloadSchemeV3{
 		Type:         &models.LinkTypeScheme{Name: linkType},
 		InwardIssue:  &models.LinkedIssueScheme{Key: newIssue.Key},
 		OutwardIssue: &models.LinkedIssueScheme{Key: closedIssue.Key},
 	}
 
-	response, err := j.jiraClient.Issue.Link.Create(context.Background(), payload)
+	response, err := j.jiraClient.Issue.Link.Create(ctx, payload)
 	if err != nil {
 		if response != nil {
 			return fmt.Errorf("create link (HTTP %d): %w", response.Code, err)
@@ -345,7 +355,7 @@ func (j junit2jira) linkToClosedTicket(newIssue, closedIssue *models.IssueScheme
 	return nil
 }
 
-func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
+func (j junit2jira) createIssueOrComment(ctx context.Context, tc j2jTestCase) (*testIssue, error) {
 	summary, err := tc.summary()
 	if err != nil {
 		return nil, fmt.Errorf("could not get summary: %w", err)
@@ -357,7 +367,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	const NA = "?"
 	logEntry(NA, summary).Debug("Searching for issue")
 	searchResult, response, err := j.jiraClient.Issue.Search.SearchJQL(
-		context.TODO(),
+		ctx,
 		fmt.Sprintf(jql, j.jiraProject, summary),
 		[]string{"summary"}, // fields - request summary field
 		nil,                 // expand
@@ -382,7 +392,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 			return nil, nil
 		}
 		issue = newIssue(j.jiraProject, summary, description)
-		create, response, err := j.jiraClient.Issue.Create(context.TODO(), issue, nil)
+		create, response, err := j.jiraClient.Issue.Create(ctx, issue, nil)
 		if err != nil {
 			logError(err, response)
 			return nil, fmt.Errorf("could not create issue %s: %w", summary, err)
@@ -395,13 +405,13 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		issueWithTestCase.issue = issue
 		issueWithTestCase.newJIRA = true
 
-		closedIssue, err := j.findMostRecentClosedIssue(summary)
+		closedIssue, err := j.findMostRecentClosedIssue(ctx, summary)
 		if err != nil {
 			logEntry(issue.Key, summary).WithError(err).Warn("Failed to search for closed tickets")
 		} else if closedIssue != nil {
 			logEntry(issue.Key, summary).Infof("Found closed ticket %s, creating link...", closedIssue.Key)
 			if !j.dryRun {
-				err = j.linkToClosedTicket(issue, closedIssue)
+				err = j.linkToClosedTicket(ctx, issue, closedIssue)
 				if err != nil {
 					logEntry(issue.Key, summary).WithError(err).Warn("Failed to link to closed ticket")
 				} else {
@@ -427,7 +437,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 		return &issueWithTestCase, nil
 	}
 
-	addComment, response, err := j.jiraClient.Issue.Comment.Add(context.TODO(), issue.Key, comment, nil)
+	addComment, response, err := j.jiraClient.Issue.Comment.Add(ctx, issue.Key, comment, nil)
 	if err != nil {
 		logError(err, response)
 		return nil, fmt.Errorf("could not comment on issue %s: %w", summary, err)
@@ -435,7 +445,7 @@ func (j junit2jira) createIssueOrComment(tc j2jTestCase) (*testIssue, error) {
 	logEntry(issue.Key, summary).Infof("Created comment %s", addComment.ID)
 
 	// Update priority based on comment count if auto-priority is enabled
-	if err := j.updatePriorityIfNeeded(issue.Key); err != nil {
+	if err := j.updatePriorityIfNeeded(ctx, issue.Key); err != nil {
 		logEntry(issue.Key, summary).WithError(err).Warn("Failed to update priority")
 	}
 
@@ -515,11 +525,11 @@ func findMatchingIssue(search []*models.IssueScheme, summary string) *models.Iss
 	return nil
 }
 
-func (j junit2jira) findMostRecentClosedIssue(summary string) (*models.IssueScheme, error) {
+func (j junit2jira) findMostRecentClosedIssue(ctx context.Context, summary string) (*models.IssueScheme, error) {
 	jqlQuery := fmt.Sprintf(jqlClosedTicketsQuery, j.jiraProject, summary)
 
 	search, response, err := j.jiraClient.Issue.Search.SearchJQL(
-		context.Background(),
+		ctx,
 		jqlQuery,
 		[]string{"summary", "updated"}, // fields
 		nil,                            // expand
@@ -663,18 +673,20 @@ type params struct {
 	BaseLink     string
 	BuildLink    string
 
-	threshold          int
-	dryRun             bool
-	jiraUrl            *url.URL
-	jiraProject        string
-	junitReportsDir    string
-	timestamp          string
-	csvOutput          string
-	htmlOutput         string
-	slackOutput        string
-	summaryOutput      string
-	enableAutoPriority bool
-	priorityThresholds string
+	threshold                int
+	dryRun                   bool
+	jiraUrl                  *url.URL
+	jiraProject              string
+	junitReportsDir          string
+	timestamp                string
+	csvOutput                string
+	htmlOutput               string
+	slackOutput              string
+	summaryOutput            string
+	enableAutoPriority       bool
+	priorityThresholds       string
+	priorityWindowDays       int
+	parsedPriorityThresholds []int
 }
 
 func newJ2jTestCase(testCase testcase.TestCase, p params) j2jTestCase {
