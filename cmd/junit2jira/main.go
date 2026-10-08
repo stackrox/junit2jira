@@ -528,27 +528,34 @@ func findMatchingIssue(search []*models.IssueScheme, summary string) *models.Iss
 func (j junit2jira) findMostRecentClosedIssue(ctx context.Context, summary string) (*models.IssueScheme, error) {
 	jqlQuery := fmt.Sprintf(jqlClosedTicketsQuery, j.jiraProject, summary)
 
-	search, response, err := j.jiraClient.Issue.Search.SearchJQL(
-		ctx,
-		jqlQuery,
-		[]string{"summary", "updated"}, // fields
-		nil,                            // expand
-		1,                              // maxResults: only need the most recent
-		"",                             // nextPageToken
-	)
-
-	if err != nil {
-		if response != nil {
-			return nil, fmt.Errorf("search closed tickets (HTTP %d): %w", response.Code, err)
+	const pageSize = 50
+	nextPageToken := ""
+	seenTokens := make(map[string]bool)
+	for {
+		search, response, err := j.jiraClient.Issue.Search.SearchJQL(
+			ctx, jqlQuery, []string{"summary", "updated"}, nil, pageSize, nextPageToken,
+		)
+		if err != nil {
+			if response != nil {
+				return nil, fmt.Errorf("search closed tickets (HTTP %d): %w", response.Code, err)
+			}
+			return nil, fmt.Errorf("search closed tickets: %w", err)
 		}
-		return nil, fmt.Errorf("search closed tickets: %w", err)
+		if search == nil {
+			return nil, nil
+		}
+		if issue := findMatchingIssue(search.Issues, summary); issue != nil {
+			return issue, nil
+		}
+		if search.NextPageToken == "" {
+			return nil, nil
+		}
+		if seenTokens[search.NextPageToken] {
+			return nil, fmt.Errorf("search closed tickets: repeated continuation token")
+		}
+		nextPageToken = search.NextPageToken
+		seenTokens[nextPageToken] = true
 	}
-
-	if search == nil || len(search.Issues) == 0 {
-		return nil, nil
-	}
-
-	return findMatchingIssue(search.Issues, summary), nil
 }
 
 func logError(e error, response *models.ResponseScheme) {
