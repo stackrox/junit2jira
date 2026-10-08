@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/carlmjohnson/versioninfo"
-	junit "github.com/joshdk/go-junit"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/stackrox/junit2jira/pkg/testcase"
@@ -59,14 +58,9 @@ func (p *flakeCheckerParams) checkFailedTests(bqClient biqQueryClient, failedTes
 }
 
 func (p *flakeCheckerParams) run() error {
-	testSuites, err := junit.IngestDir(p.junitReportsDir)
+	failedTests, err := loadFailedTests(p.junitReportsDir)
 	if err != nil {
-		return errors.Wrap(err, "could not read files")
-	}
-
-	failedTests, err := testcase.GetFailedTests(testSuites)
-	if err != nil {
-		return errors.Wrap(err, "could not find failed tests")
+		return err
 	}
 	log.Infof("Found %d failed tests", len(failedTests))
 
@@ -106,4 +100,17 @@ func main() {
 	if err := p.run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func loadFailedTests(reportDir string) ([]testcase.TestCase, error) {
+	testSuites, err := testcase.LoadTestSuites(reportDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not read files")
+	}
+
+	failedTests, err := testcase.GetFailedTests(testSuites)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not find failed tests")
+	}
+	return failedTests, nil
 }
