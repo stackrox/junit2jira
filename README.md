@@ -92,7 +92,7 @@ The default thresholds map the comment count in that window to a target priority
 | 100-199 | Blocker |
 | 200+ | Critical |
 
-These are fixed comment-count thresholds, not percentile targets. Priority is only
+Priority is only
 raised: for example, an issue with 12 recent comments moves from Minor to Normal,
 but an issue already at Blocker stays at Blocker. Unrecognized Jira priority names
 are left unchanged with a warning.
