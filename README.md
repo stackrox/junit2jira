@@ -53,7 +53,7 @@ Usage of junit2jira:
   -orchestrator string
     	Orchestrator name (such as GKE or OpenShift), if any.
   -priority-thresholds string
-    	Comma-separated thresholds for priority escalation (Minor,Normal,Major,Blocker,Critical). (default "2,10,50,100,200")
+        Comma-separated minimum comment counts for priority escalation (Minor,Normal,Major,Blocker,Critical). (default "2,10,50,100,200")
   -priority-window-days int
         Number of recent days used for automatic priority escalation. (default 30)
   -slack-output string
@@ -99,8 +99,10 @@ are left unchanged with a warning.
 
 `--priority-window-days` must be a positive integer. `--priority-thresholds` must
 contain exactly five comma-separated, non-negative integers in strictly ascending
-order, corresponding to Minor, Normal, Major, Blocker, and Critical. Invalid
-configuration is rejected at startup, even when automatic escalation is disabled.
+order. These are minimum comment counts for Minor, Normal, Major, Blocker, and
+Critical, respectively. For example, 12 comments in the selected window yields
+Normal with the defaults, but Minor with `10,50,100,200,400`. Invalid configuration
+is rejected at startup, even when automatic escalation is disabled.
 
 With `--dry-run`, no comment is added and automatic priority evaluation is skipped;
 the command does not preview the resulting priority.

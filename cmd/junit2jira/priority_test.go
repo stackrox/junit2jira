@@ -21,6 +21,33 @@ func TestPriorityForCommentCount(t *testing.T) {
 	}
 }
 
+func TestPriorityForCommentCountCustomThresholds(t *testing.T) {
+	customThresholds, err := parsePriorityThresholds("10,50,100,200,400")
+	require.NoError(t, err)
+	for name, test := range map[string]struct {
+		count           int
+		defaultPriority Priority
+		customPriority  Priority
+	}{
+		"below Minor":                   {9, Minor, Undefined},
+		"Minor boundary":                {10, Normal, Minor},
+		"same count different priority": {12, Normal, Minor},
+		"below Normal":                  {49, Normal, Minor},
+		"Normal boundary":               {50, Major, Normal},
+		"below Major":                   {99, Major, Normal},
+		"Major boundary":                {100, Blocker, Major},
+		"below Blocker":                 {199, Blocker, Major},
+		"Blocker boundary":              {200, Critical, Blocker},
+		"below Critical":                {399, Critical, Blocker},
+		"Critical boundary":             {400, Critical, Critical},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, test.defaultPriority, priorityForCommentCount(test.count, defaultPriorityThresholds))
+			require.Equal(t, test.customPriority, priorityForCommentCount(test.count, customThresholds))
+		})
+	}
+}
+
 func TestCountCommentsInWindow(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	comments := []*models.IssueCommentScheme{

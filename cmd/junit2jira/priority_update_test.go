@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -107,6 +108,8 @@ func TestUpdatePriorityIfNeeded(t *testing.T) {
 		dryRun       bool
 		empty        bool
 		wantUpdate   bool
+		failOn       string
+		wantError    string
 	}{
 		{name: "all pages and selected window", initialTotal: 4, current: "Undefined", wantUpdate: true},
 		{name: "total grows", initialTotal: 1, current: "Undefined", wantUpdate: true},
@@ -116,12 +119,15 @@ func TestUpdatePriorityIfNeeded(t *testing.T) {
 		{name: "unknown priority", initialTotal: 4, current: "Custom"},
 		{name: "dry run", initialTotal: 4, current: "Undefined", dryRun: true},
 		{name: "no comments", current: "Undefined", empty: true},
+		{name: "comment fetch failure", current: "Undefined", failOn: "comments", wantError: "could not fetch comments for issue TEST-1"},
+		{name: "priority update failure", current: "Undefined", wantUpdate: true, failOn: "update", wantError: "could not update priority for issue TEST-1"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			type contextKey struct{}
 			ctx := context.WithValue(context.Background(), contextKey{}, "caller")
 			var offsets []string
 			updates := 0
+			apiErr := errors.New("Jira request failed")
 			client, err := jira.New(&http.Client{Transport: priorityRoundTripper(func(req *http.Request) (*http.Response, error) {
 				require.Equal(t, "caller", req.Context().Value(contextKey{}), "caller context must reach every Jira request")
 				var body any
@@ -131,8 +137,11 @@ func TestUpdatePriorityIfNeeded(t *testing.T) {
 				case req.Method == http.MethodGet && req.URL.Path == "/rest/api/3/issue/TEST-1/comment":
 					offset := req.URL.Query().Get("startAt")
 					offsets = append(offsets, offset)
-					require.Equal(t, "50", req.URL.Query().Get("maxResults"))
+					require.Equal(t, "100", req.URL.Query().Get("maxResults"))
 					require.Equal(t, "created", req.URL.Query().Get("orderBy"))
+					if test.failOn == "comments" && offset == "2" {
+						return nil, apiErr
+					}
 					created := time.Now().AddDate(0, 0, -60).Format(time.RFC3339)
 					if offset == "2" {
 						created = time.Now().Add(-time.Hour).Format(time.RFC3339)
@@ -145,6 +154,9 @@ func TestUpdatePriorityIfNeeded(t *testing.T) {
 					}
 				case req.Method == http.MethodPut && req.URL.Path == "/rest/api/3/issue/TEST-1":
 					updates++
+					if test.failOn == "update" {
+						return nil, apiErr
+					}
 					payload, err := io.ReadAll(req.Body)
 					require.NoError(t, err)
 					require.JSONEq(t, `{"fields":{"priority":{"name":"Minor"}}}`, string(payload))
@@ -158,7 +170,13 @@ func TestUpdatePriorityIfNeeded(t *testing.T) {
 			})}, "https://jira.example/")
 			require.NoError(t, err)
 			j := junit2jira{params: params{enableAutoPriority: true, priorityWindowDays: 30, parsedPriorityThresholds: []int{2, 3, 4, 5, 6}, dryRun: test.dryRun}, jiraClient: client}
-			require.NoError(t, j.updatePriorityIfNeeded(ctx, "TEST-1"))
+			err = j.updatePriorityIfNeeded(ctx, "TEST-1")
+			if test.wantError != "" {
+				require.ErrorContains(t, err, test.wantError)
+				require.ErrorIs(t, err, apiErr)
+			} else {
+				require.NoError(t, err)
+			}
 			if test.empty {
 				require.Equal(t, []string{"0"}, offsets)
 			} else {

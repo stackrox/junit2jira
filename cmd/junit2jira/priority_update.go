@@ -10,6 +10,8 @@ import (
 	"github.com/ctreminiom/go-atlassian/v2/pkg/infra/models"
 )
 
+// parsePriorityThresholds parses minimum comment counts for Minor, Normal, Major,
+// Blocker, and Critical. Strict ordering gives each priority a distinct count range.
 func parsePriorityThresholds(thresholdsStr string) ([]int, error) {
 	parts := strings.Split(thresholdsStr, ",")
 	if len(parts) != len(defaultPriorityThresholds) {
@@ -81,41 +83,42 @@ func (j junit2jira) updatePriorityIfNeeded(ctx context.Context, issueKey string)
 		return fmt.Errorf("priority thresholds have not been configured")
 	}
 
-	issue, response, err := j.jiraClient.Issue.Get(ctx, issueKey, []string{"priority"}, nil)
+	priority, err := j.fetchIssuePriority(ctx, issueKey)
 	if err != nil {
-		logError(err, response)
-		return fmt.Errorf("could not fetch issue %s: %w", issueKey, err)
+		return err
 	}
 
-	const pageSize = 50
-	var comments []*models.IssueCommentScheme
-	// Use the comment endpoint's totals; the issue's embedded count can be stale.
-	for startAt := 0; ; {
-		page, response, err := j.jiraClient.Issue.Comment.Gets(ctx, issueKey, "created", nil, startAt, pageSize)
-		if err != nil {
-			logError(err, response)
-			return fmt.Errorf("could not fetch comments for issue %s: %w", issueKey, err)
-		}
-		if page == nil || len(page.Comments) == 0 {
-			break
-		}
-		comments = append(comments, page.Comments...)
-		startAt += len(page.Comments)
-		if startAt >= page.Total {
-			break
-		}
+	comments, err := j.fetchIssueComments(ctx, issueKey)
+	if err != nil {
+		return err
 	}
 
 	windowCount := countCommentsInWindow(comments, j.priorityWindowDays, time.Now(), func(index int, timestamp string) {
 		logEntry(issueKey, "").Warnf("Skipping comment %d with unparseable timestamp %q", index, timestamp)
 	})
 
+	return j.escalateIssuePriority(ctx, issueKey, priority, windowCount)
+}
+
+func (j junit2jira) fetchIssuePriority(ctx context.Context, issueKey string) (*models.PriorityScheme, error) {
+	issue, response, err := j.jiraClient.Issue.Get(ctx, issueKey, []string{"priority"}, nil)
+	if err != nil {
+		logError(err, response)
+		return nil, fmt.Errorf("could not fetch issue %s: %w", issueKey, err)
+	}
+	if issue == nil || issue.Fields == nil {
+		return nil, nil
+	}
+	return issue.Fields.Priority, nil
+}
+
+func (j junit2jira) escalateIssuePriority(ctx context.Context, issueKey string, priority *models.PriorityScheme, windowCount int) error {
 	currentPriority := Undefined
-	if issue != nil && issue.Fields != nil && issue.Fields.Priority != nil {
+	if priority != nil {
 		var recognized bool
-		currentPriority, recognized = parsePriority(issue.Fields.Priority.Name)
+		currentPriority, recognized = parsePriority(priority.Name)
 		if !recognized {
-			logEntry(issueKey, "").Warnf("Unrecognized priority %q, skipping auto-escalation", issue.Fields.Priority.Name)
+			logEntry(issueKey, "").Warnf("Unrecognized priority %q, skipping auto-escalation", priority.Name)
 			return nil
 		}
 	}
@@ -132,12 +135,41 @@ func (j junit2jira) updatePriorityIfNeeded(ctx context.Context, issueKey string)
 		return nil
 	}
 
-	payload := &models.IssueScheme{Fields: &models.IssueFieldsScheme{Priority: &models.PriorityScheme{Name: targetPriority.String()}}}
-	response, err = j.jiraClient.Issue.Update(ctx, issueKey, true, payload, nil, nil)
+	return j.setIssuePriority(ctx, issueKey, targetPriority)
+}
+
+func (j junit2jira) fetchIssueComments(ctx context.Context, issueKey string) ([]*models.IssueCommentScheme, error) {
+	// Match Jira Cloud's documented default comment page size; the server may return fewer comments.
+	// https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-get
+	const pageSize = 100
+	var comments []*models.IssueCommentScheme
+	// Use the comment endpoint's totals; the issue's embedded count can be stale.
+	for startAt := 0; ; {
+		page, response, err := j.jiraClient.Issue.Comment.Gets(ctx, issueKey, "created", nil, startAt, pageSize)
+		if err != nil {
+			logError(err, response)
+			return nil, fmt.Errorf("could not fetch comments for issue %s: %w", issueKey, err)
+		}
+		if page == nil || len(page.Comments) == 0 {
+			break
+		}
+		comments = append(comments, page.Comments...)
+		startAt += len(page.Comments)
+		if startAt >= page.Total {
+			break
+		}
+	}
+
+	return comments, nil
+}
+
+func (j junit2jira) setIssuePriority(ctx context.Context, issueKey string, priority Priority) error {
+	payload := &models.IssueScheme{Fields: &models.IssueFieldsScheme{Priority: &models.PriorityScheme{Name: priority.String()}}}
+	response, err := j.jiraClient.Issue.Update(ctx, issueKey, true, payload, nil, nil)
 	if err != nil {
 		logError(err, response)
 		return fmt.Errorf("could not update priority for issue %s: %w", issueKey, err)
 	}
-	logEntry(issueKey, "").Infof("Updated priority to %s", targetPriority)
+	logEntry(issueKey, "").Infof("Updated priority to %s", priority)
 	return nil
 }
