@@ -88,12 +88,13 @@ func (j junit2jira) updatePriorityIfNeeded(ctx context.Context, issueKey string)
 		return err
 	}
 
-	comments, err := j.fetchIssueComments(ctx, issueKey)
+	now := time.Now()
+	comments, err := j.fetchIssueComments(ctx, issueKey, now.AddDate(0, 0, -j.priorityWindowDays))
 	if err != nil {
 		return err
 	}
 
-	windowCount := countCommentsInWindow(comments, j.priorityWindowDays, time.Now(), func(index int, timestamp string) {
+	windowCount := countCommentsInWindow(comments, j.priorityWindowDays, now, func(index int, timestamp string) {
 		logEntry(issueKey, "").Warnf("Skipping comment %d with unparseable timestamp %q", index, timestamp)
 	})
 
@@ -138,14 +139,14 @@ func (j junit2jira) escalateIssuePriority(ctx context.Context, issueKey string, 
 	return j.setIssuePriority(ctx, issueKey, targetPriority)
 }
 
-func (j junit2jira) fetchIssueComments(ctx context.Context, issueKey string) ([]*models.IssueCommentScheme, error) {
+func (j junit2jira) fetchIssueComments(ctx context.Context, issueKey string, windowStart time.Time) ([]*models.IssueCommentScheme, error) {
 	// Match Jira Cloud's documented default comment page size; the server may return fewer comments.
 	// https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-get
 	const pageSize = 100
 	var comments []*models.IssueCommentScheme
 	// Use the comment endpoint's totals; the issue's embedded count can be stale.
 	for startAt := 0; ; {
-		page, response, err := j.jiraClient.Issue.Comment.Gets(ctx, issueKey, "created", nil, startAt, pageSize)
+		page, response, err := j.jiraClient.Issue.Comment.Gets(ctx, issueKey, "-created", nil, startAt, pageSize)
 		if err != nil {
 			logError(err, response)
 			return nil, fmt.Errorf("could not fetch comments for issue %s: %w", issueKey, err)
@@ -153,7 +154,17 @@ func (j junit2jira) fetchIssueComments(ctx context.Context, issueKey string) ([]
 		if page == nil || len(page.Comments) == 0 {
 			break
 		}
-		comments = append(comments, page.Comments...)
+		for _, comment := range page.Comments {
+			if comment != nil {
+				created, err := parseCommentTime(comment.Created)
+				// Newest-first ordering means all subsequent comments are outside the window.
+				// Unparseable timestamps cannot establish the cutoff; retain them for warnings.
+				if err == nil && !created.After(windowStart) {
+					return comments, nil
+				}
+			}
+			comments = append(comments, comment)
+		}
 		startAt += len(page.Comments)
 		if startAt >= page.Total {
 			break

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -138,15 +139,15 @@ func TestUpdatePriorityIfNeeded(t *testing.T) {
 					offset := req.URL.Query().Get("startAt")
 					offsets = append(offsets, offset)
 					require.Equal(t, "100", req.URL.Query().Get("maxResults"))
-					require.Equal(t, "created", req.URL.Query().Get("orderBy"))
+					require.Equal(t, "-created", req.URL.Query().Get("orderBy"))
 					if test.failOn == "comments" && offset == "2" {
 						return nil, apiErr
 					}
 					created := time.Now().AddDate(0, 0, -60).Format(time.RFC3339)
-					if offset == "2" {
+					if offset == "0" {
 						created = time.Now().Add(-time.Hour).Format(time.RFC3339)
 					} else {
-						require.Equal(t, "0", offset)
+						require.Equal(t, "2", offset)
 					}
 					body = map[string]any{"total": 4, "comments": []any{map[string]string{"created": created}, map[string]string{"created": created}}}
 					if test.empty {
@@ -215,6 +216,51 @@ func TestRunRejectsInvalidPriorityConfiguration(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			require.ErrorContains(t, run(context.Background(), params{priorityWindowDays: test.window, priorityThresholds: test.thresholds}), test.wantError)
+		})
+	}
+}
+
+func TestFetchIssueCommentsStopsAtWindow(t *testing.T) {
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	cutoff := now.AddDate(0, 0, -30)
+	recent := now.Add(-time.Hour).Format(time.RFC3339)
+	for name, test := range map[string]struct {
+		pages     [][]string
+		total     int
+		wantPages int
+		wantCount int
+	}{
+		"cutoff within first page":                            {[][]string{{recent, cutoff.Format(time.RFC3339), "older"}}, 1000, 1, 1},
+		"old timestamp within first page":                     {[][]string{{recent, cutoff.Add(-time.Second).Format(time.RFC3339)}}, 1000, 1, 1},
+		"recent pages before cutoff":                          {[][]string{{recent, recent}, {recent, cutoff.Format(time.RFC3339)}}, 1000, 2, 3},
+		"malformed and missing timestamps do not stop paging": {[][]string{{"invalid", ""}, {recent, cutoff.Format(time.RFC3339)}}, 1000, 2, 1},
+		"endpoint total ends recent history":                  {[][]string{{recent, recent}}, 2, 1, 2},
+		"empty page ends paging":                              {[][]string{{}}, 1000, 1, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			requests := 0
+			offset := 0
+			client, err := jira.New(&http.Client{Transport: priorityRoundTripper(func(req *http.Request) (*http.Response, error) {
+				require.Equal(t, "-created", req.URL.Query().Get("orderBy"))
+				require.Equal(t, fmt.Sprint(offset), req.URL.Query().Get("startAt"))
+				require.Less(t, requests, len(test.pages), "must not fetch beyond the window")
+				timestamps := test.pages[requests]
+				requests++
+				offset += len(timestamps)
+				comments := make([]map[string]string, 0, len(timestamps))
+				for _, timestamp := range timestamps {
+					comments = append(comments, map[string]string{"created": timestamp})
+				}
+				data, err := json.Marshal(map[string]any{"total": test.total, "comments": comments})
+				require.NoError(t, err)
+				return &http.Response{Request: req, StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(data))), Header: http.Header{"Content-Type": {"application/json"}}}, nil
+			})}, "https://jira.example/")
+			require.NoError(t, err)
+			j := junit2jira{jiraClient: client}
+			comments, err := j.fetchIssueComments(context.Background(), "TEST-1", cutoff)
+			require.NoError(t, err)
+			require.Equal(t, test.wantPages, requests)
+			require.Equal(t, test.wantCount, countCommentsInWindow(comments, 30, now, func(int, string) {}))
 		})
 	}
 }
