@@ -1,8 +1,12 @@
 package main
 
 import (
-	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func newFlakeDetectionPolicyMust(config flakeDetectionPolicyConfig) *flakeDetectionPolicy {
@@ -12,6 +16,23 @@ func newFlakeDetectionPolicyMust(config flakeDetectionPolicyConfig) *flakeDetect
 	}
 
 	return policy
+}
+
+func TestLoadFlakeConfigFileInvalidRegex(t *testing.T) {
+	fileName := filepath.Join(t.TempDir(), "invalid.yml")
+	err := os.WriteFile(fileName, []byte(strings.TrimSpace(`
+- jobNameRegex: "["
+  className: "Test"
+  testNameRegex: ".*"
+  ratioJobName: "main"
+  ratioThreshold: 5
+`)), 0o600)
+	assert.NoError(t, err)
+
+	config, err := loadFlakeConfigFile(fileName)
+	assert.Nil(t, config)
+	assert.ErrorContains(t, err, "create flake detection policy from config")
+	assert.ErrorContains(t, err, "invalid flake config match job regex")
 }
 
 func TestLoadFlakeConfigFile(t *testing.T) {

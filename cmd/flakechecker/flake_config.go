@@ -39,12 +39,12 @@ type flakeDetectionPolicy struct {
 }
 
 func newFlakeDetectionPolicy(config flakeDetectionPolicyConfig) (*flakeDetectionPolicy, error) {
-	compiledJobNameRegex, err := regexp.Compile(fmt.Sprintf("^%s$", config.JobNameRegex))
+	compiledJobNameRegex, err := regexp.Compile(fmt.Sprintf("^(?:%s)$", config.JobNameRegex))
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("invalid flake config match job regex: %v", config.JobNameRegex))
 	}
 
-	compiledTestNameRegex, err := regexp.Compile(fmt.Sprintf("^%s$", config.TestNameRegex))
+	compiledTestNameRegex, err := regexp.Compile(fmt.Sprintf("^(?:%s)$", config.TestNameRegex))
 	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("invalid flake config test name regex: %v", config.TestNameRegex))
 	}
@@ -100,7 +100,7 @@ func loadFlakeConfigFile(fileName string) ([]*flakeDetectionPolicy, error) {
 	for _, flakeConfig := range flakeConfigs {
 		detectionPolicy, errNewPolicy := newFlakeDetectionPolicy(flakeConfig)
 		if errNewPolicy != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("create flake detection policy from config: %v", flakeConfig))
+			return nil, errors.Wrap(errNewPolicy, fmt.Sprintf("create flake detection policy from config: %v", flakeConfig))
 		}
 
 		detectionPolicies = append(detectionPolicies, detectionPolicy)
