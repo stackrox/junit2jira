@@ -15,7 +15,7 @@ func TestPriorityForCommentCount(t *testing.T) {
 		expected Priority
 	}{
 		{0, Undefined}, {1, Undefined}, {2, Minor}, {10, Normal},
-		{50, Major}, {100, Blocker}, {200, Critical}, {1000, Critical},
+		{50, Major}, {100, Critical}, {200, Blocker}, {1000, Blocker},
 	} {
 		require.Equal(t, test.expected, priorityForCommentCount(test.count, thresholds))
 	}
@@ -35,11 +35,11 @@ func TestPriorityForCommentCountCustomThresholds(t *testing.T) {
 		"below Normal":                  {49, Normal, Minor},
 		"Normal boundary":               {50, Major, Normal},
 		"below Major":                   {99, Major, Normal},
-		"Major boundary":                {100, Blocker, Major},
-		"below Blocker":                 {199, Blocker, Major},
-		"Blocker boundary":              {200, Critical, Blocker},
-		"below Critical":                {399, Critical, Blocker},
-		"Critical boundary":             {400, Critical, Critical},
+		"Major boundary":                {100, Critical, Major},
+		"below Critical":                {199, Critical, Major},
+		"Critical boundary":             {200, Blocker, Critical},
+		"below Blocker":                 {399, Blocker, Critical},
+		"Blocker boundary":              {400, Blocker, Blocker},
 	} {
 		t.Run(name, func(t *testing.T) {
 			require.Equal(t, test.defaultPriority, priorityForCommentCount(test.count, defaultPriorityThresholds))
@@ -66,4 +66,9 @@ func TestCountCommentsInWindow(t *testing.T) {
 	})
 	require.Equal(t, 1, count)
 	require.Equal(t, 1, warnings)
+}
+
+func TestPriorityOrder(t *testing.T) {
+	require.Less(t, Major, Critical)
+	require.Less(t, Critical, Blocker)
 }
