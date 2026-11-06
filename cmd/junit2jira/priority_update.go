@@ -11,7 +11,7 @@ import (
 )
 
 // parsePriorityThresholds parses minimum comment counts for Minor, Normal, Major,
-// Blocker, and Critical. Strict ordering gives each priority a distinct count range.
+// Critical, and Blocker. Strict ordering gives each priority a distinct count range.
 func parsePriorityThresholds(thresholdsStr string) ([]int, error) {
 	parts := strings.Split(thresholdsStr, ",")
 	if len(parts) != len(defaultPriorityThresholds) {

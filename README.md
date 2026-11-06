@@ -53,7 +53,7 @@ Usage of junit2jira:
   -orchestrator string
     	Orchestrator name (such as GKE or OpenShift), if any.
   -priority-thresholds string
-        Comma-separated minimum comment counts for priority escalation (Minor,Normal,Major,Blocker,Critical). (default "2,10,50,100,200")
+        Comma-separated minimum comment counts for priority escalation (Minor,Normal,Major,Critical,Blocker). (default "2,10,50,100,200")
   -priority-window-days int
         Number of recent days used for automatic priority escalation. (default 30)
   -slack-output string
@@ -89,8 +89,8 @@ The default thresholds map the comment count in that window to a target priority
 | 2-9 | Minor |
 | 10-49 | Normal |
 | 50-99 | Major |
-| 100-199 | Blocker |
-| 200+ | Critical |
+| 100-199 | Critical |
+| 200+ | Blocker |
 
 Priority is only
 raised: for example, an issue with 12 recent comments moves from Minor to Normal,
@@ -99,8 +99,8 @@ are left unchanged with a warning.
 
 `--priority-window-days` must be a positive integer. `--priority-thresholds` must
 contain exactly five comma-separated, non-negative integers in strictly ascending
-order. These are minimum comment counts for Minor, Normal, Major, Blocker, and
-Critical, respectively. For example, 12 comments in the selected window yields
+order. These are minimum comment counts for Minor, Normal, Major, Critical, and
+Blocker, respectively. For example, 12 comments in the selected window yields
 Normal with the defaults, but Minor with `10,50,100,200,400`. Invalid configuration
 is rejected at startup, even when automatic escalation is disabled.
 
