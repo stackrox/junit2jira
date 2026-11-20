@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -24,26 +25,33 @@ func TestPriorityForCommentCount(t *testing.T) {
 func TestPriorityForCommentCountCustomThresholds(t *testing.T) {
 	customThresholds, err := parsePriorityThresholds("10,50,100,200,400")
 	require.NoError(t, err)
-	for name, test := range map[string]struct {
-		count           int
+	for count, test := range map[int]struct {
 		defaultPriority Priority
 		customPriority  Priority
 	}{
-		"below Minor":                   {9, Minor, Undefined},
-		"Minor boundary":                {10, Normal, Minor},
-		"same count different priority": {12, Normal, Minor},
-		"below Normal":                  {49, Normal, Minor},
-		"Normal boundary":               {50, Major, Normal},
-		"below Major":                   {99, Major, Normal},
-		"Major boundary":                {100, Critical, Major},
-		"below Critical":                {199, Critical, Major},
-		"Critical boundary":             {200, Blocker, Critical},
-		"below Blocker":                 {399, Blocker, Critical},
-		"Blocker boundary":              {400, Blocker, Blocker},
+		0:   {Undefined, Undefined},
+		1:   {Minor, Undefined},
+		2:   {Normal, Undefined},
+		11:  {Normal, Minor},
+		12:  {Major, Minor},
+		23:  {Major, Minor},
+		24:  {Critical, Minor},
+		47:  {Critical, Minor},
+		49:  {Blocker, Minor},
+		50:  {Blocker, Normal},
+		99:  {Blocker, Normal},
+		100: {Blocker, Major},
+		199: {Blocker, Major},
+		200: {Blocker, Critical},
+		399: {Blocker, Critical},
+		400: {Blocker, Blocker},
 	} {
-		t.Run(name, func(t *testing.T) {
-			require.Equal(t, test.defaultPriority, priorityForCommentCount(test.count, defaultPriorityThresholds))
-			require.Equal(t, test.customPriority, priorityForCommentCount(test.count, customThresholds))
+		t.Run(fmt.Sprintf("count=%d", count), func(t *testing.T) {
+			defaultRes := priorityForCommentCount(count, defaultPriorityThresholds)
+			require.Equal(t, test.defaultPriority, defaultRes, "priority for default thresholds does not match")
+
+			customRes := priorityForCommentCount(count, customThresholds)
+			require.Equal(t, test.customPriority, customRes, "priority for custom thresholds does not match")
 		})
 	}
 }
