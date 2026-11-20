@@ -53,9 +53,9 @@ Usage of junit2jira:
   -orchestrator string
     	Orchestrator name (such as GKE or OpenShift), if any.
   -priority-thresholds string
-        Comma-separated minimum comment counts for priority escalation (Minor,Normal,Major,Critical,Blocker). (default "2,10,50,100,200")
+        Comma-separated minimum comment counts for priority escalation (Minor,Normal,Major,Critical,Blocker). (default "1,2,12,24,48")
   -priority-window-days int
-        Number of recent days used for automatic priority escalation. (default 30)
+        Number of recent days used for automatic priority escalation. (default 7)
   -slack-output string
     	Generate JSON output in slack format (use dash [-] for stdout)
   -threshold int
@@ -71,9 +71,9 @@ Usage of junit2jira:
 
 Automatic priority escalation is disabled by default. With `--enable-auto-priority`,
 `junit2jira` evaluates an existing issue after successfully adding a comment to it.
-It counts comments in one recent activity window, which defaults to 30 days and
-can be changed with `--priority-window-days`. Newly created issues are not evaluated
-for escalation during that run.
+It counts comments in one recent activity window, which is controlled by
+`--priority-window-days` option. Newly created issues are not evaluated for
+escalation during that run.
 
 All available comment pages are fetched before counting. Comments from any author
 count if their creation timestamp is strictly after the window's start; comments
@@ -85,35 +85,33 @@ The default thresholds map the comment count in that window to a target priority
 
 | Window count | Priority |
 |-------------|----------|
-| 0-1 | Undefined |
-| 2-9 | Minor |
-| 10-49 | Normal |
-| 50-99 | Major |
-| 100-199 | Critical |
-| 200+ | Blocker |
+| 0 | Undefined |
+| 1 | Minor |
+| 2-11 | Normal |
+| 12-23 | Major |
+| 24-47 | Critical |
+| 48+ | Blocker |
 
-Priority is only
-raised: for example, an issue with 12 recent comments moves from Minor to Normal,
-but an issue already at Blocker stays at Blocker. Unrecognized Jira priority names
-are left unchanged with a warning.
+Priority is only raised. For example, a Minor issue that got enough recent comments
+moves from Minor to Normal, but an issue already at Blocker stays at Blocker.
+Unrecognized Jira priority names are left unchanged with a warning.
 
 `--priority-window-days` must be a positive integer. `--priority-thresholds` must
 contain exactly five comma-separated, non-negative integers in strictly ascending
 order. These are minimum comment counts for Minor, Normal, Major, Critical, and
-Blocker, respectively. For example, 12 comments in the selected window yields
-Normal with the defaults, but Minor with `10,50,100,200,400`. Invalid configuration
-is rejected at startup, even when automatic escalation is disabled.
+Blocker, respectively. Invalid configuration is rejected at startup, even when
+automatic escalation is disabled.
 
 With `--dry-run`, no comment is added and automatic priority evaluation is skipped;
 the command does not preview the resulting priority.
 
-For example, to count comments from the last 10 days and use thresholds of
+For example, to count comments from the last 30 days and use thresholds of
 10, 50, 100, 200, and 400:
 
 ```shell
 junit2jira \
   --enable-auto-priority \
-  --priority-window-days 10 \
+  --priority-window-days 30 \
   --priority-thresholds "10,50,100,200,400" \
   ...
 ```
